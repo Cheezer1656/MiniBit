@@ -7,7 +7,7 @@
         "connection_mode": 1
     },
     "world": {
-        "path": "..\\worlds\\sumo1",
+        "path": "../worlds/sumo1",
         "spawn": [0.5, 10.0, 0.5]
     }
 }

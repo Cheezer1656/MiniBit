@@ -8,7 +8,7 @@
         "secret": "mp8nykLkU7RE"
     },
     "world": {
-        "path": "..\\worlds\\lobby",
+        "path": "../worlds/lobby",
         "spawn": [-19.5, 20.0, 61.5]
     },
     "parkour": [
