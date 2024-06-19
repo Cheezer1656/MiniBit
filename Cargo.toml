@@ -1,0 +1,27 @@
+[package]
+name = "minibit"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+json = "0.12.4"
+rand = "0.8.5"
+bevy = { version = "0.12", default-features = false, features = [
+    "dynamic_linking",
+] }
+valence = { git = "https://github.com/valence-rs/valence" }
+valence_anvil = { git = "https://github.com/valence-rs/valence" }
+
+[[bin]]
+name = "lobby_server"
+path = "src/lobby/lobby.rs"
+
+[[bin]]
+name = "sumo_server"
+path = "src/sumo/sumo.rs"
+
+[profile.dev]
+opt-level = 1
+
+[profile.dev.package."*"]
+opt-level = 3

@@ -1,0 +1,425 @@
+use std::{
+    net::{IpAddr, Ipv4Addr, SocketAddr},
+    path::{Path, PathBuf},
+    sync::Arc,
+    time::{Duration, SystemTime},
+};
+
+use valence::{
+    entity::player::PlayerEntityBundle,
+    message::{ChatMessageEvent, SendMessage},
+    player_list::{DisplayName, Listed, PlayerListEntryBundle},
+    prelude::*,
+    protocol::{sound::SoundCategory, Sound},
+};
+use valence_anvil::AnvilLevel;
+
+#[derive(Clone)]
+enum ActionType {
+    Message,
+    Warp,
+    None,
+}
+#[derive(Component, Clone)]
+struct NpcAction {
+    command: ActionType,
+    args: Vec<String>,
+}
+
+#[derive(Component, Clone)]
+struct NpcName(String);
+#[derive(Component, Clone)]
+struct SkinValue(String);
+#[derive(Component, Clone)]
+struct SkinSignature(String);
+
+#[derive(Bundle, Clone)]
+struct NpcConfig {
+    uuid: UniqueId,
+    name: NpcName,
+    position: Position,
+    yaw: HeadYaw,
+    skin: SkinValue,
+    signature: SkinSignature,
+    command: NpcAction,
+}
+
+struct ParkourConfig {
+    name: String,
+    start: DVec3,
+    end: DVec3,
+}
+
+#[derive(Resource)]
+struct ServerConfig {
+    world_path: PathBuf,
+    spawn_pos: DVec3,
+    npcs: Vec<NpcConfig>,
+    parkour: Vec<ParkourConfig>,
+}
+
+#[derive(Component)]
+struct ParkourStatus {
+    name: String,
+    start: SystemTime,
+    end: DVec3,
+}
+
+pub fn main() {
+    let Ok(config) = std::fs::read_to_string("config.json") else {
+        eprintln!("Failed to read `config.json`. Exiting.");
+        return;
+    };
+    let Ok(config) = json::parse(&config) else {
+        eprintln!("Failed to parse `config.json`. Exiting.");
+        return;
+    };
+
+    if config["server"].is_null() || config["world"].is_null() {
+        eprintln!("`server` or `world` key is missing in `config.json`. Exiting.");
+        return;
+    }
+
+    let world_path: PathBuf = match config["world"]["path"].as_str() {
+        Some(dir) => Path::new(dir).to_path_buf(),
+        None => {
+            eprintln!("`path` key is missing in `world` object in `config.json`. Exiting.");
+            return;
+        }
+    };
+
+    if !world_path.exists() {
+        eprintln!(
+            "Directory `{}` does not exist. Exiting.",
+            world_path.display()
+        );
+        return;
+    }
+
+    if !world_path.is_dir() {
+        eprintln!("`{}` is not a directory. Exiting.", world_path.display());
+        return;
+    }
+
+    let spawn_pos = config["world"]["spawn"]
+        .members()
+        .map(|v| v.as_f64().unwrap_or(0.0))
+        .collect::<Vec<f64>>();
+
+    let server_config = ServerConfig {
+        world_path,
+        spawn_pos: DVec3::new(spawn_pos[0], spawn_pos[1], spawn_pos[2]),
+        npcs: config["npcs"]
+            .members()
+            .map(|npc| NpcConfig {
+                uuid: UniqueId::default(),
+                name: NpcName(npc["name"].as_str().unwrap_or("Steve").to_string()),
+                position: Position::new(DVec3::new(
+                    npc["position"][0].as_f64().unwrap_or(0.0),
+                    npc["position"][1].as_f64().unwrap_or(0.0),
+                    npc["position"][2].as_f64().unwrap_or(0.0),
+                )),
+                yaw: HeadYaw(npc["yaw"].as_f32().unwrap_or(0.0)),
+                skin: SkinValue(npc["skin"].as_str().unwrap_or("").to_string()),
+                signature: SkinSignature(npc["signature"].as_str().unwrap_or("").to_string()),
+                command: NpcAction {
+                    command: match npc["command"][0].as_str().unwrap_or("") {
+                        "message" => ActionType::Message,
+                        "warp" => ActionType::Warp,
+                        _ => ActionType::None,
+                    },
+                    args: npc["command"]
+                        .members()
+                        .skip(1)
+                        .map(|v| v.as_str().unwrap_or("").to_string())
+                        .collect(),
+                },
+            })
+            .collect(),
+        parkour: config["parkour"]
+            .members()
+            .map(|parkour| ParkourConfig {
+                name: parkour["name"].as_str().unwrap_or("Parkour").to_string(),
+                start: DVec3::new(
+                    parkour["start"][0].as_f64().unwrap(),
+                    parkour["start"][1].as_f64().unwrap(),
+                    parkour["start"][2].as_f64().unwrap(),
+                ),
+                end: DVec3::new(
+                    parkour["end"][0].as_f64().unwrap(),
+                    parkour["end"][1].as_f64().unwrap(),
+                    parkour["end"][2].as_f64().unwrap(),
+                ),
+            })
+            .collect(),
+    };
+
+    App::new()
+        .insert_resource(NetworkSettings {
+            address: SocketAddr::new(
+                config["server"]["ip"]
+                    .as_str()
+                    .unwrap_or("0.0.0.0")
+                    .parse()
+                    .unwrap_or(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0))),
+                config["server"]["port"].as_u16().unwrap_or(25565),
+            ),
+            max_players: config["server"]["max_players"].as_usize().unwrap_or(20),
+            max_connections: config["server"]["max_players"].as_usize().unwrap_or(20),
+            connection_mode: match config["server"]["connection_mode"].as_u8().unwrap_or(0) {
+                1 => ConnectionMode::Offline,
+                2 => ConnectionMode::BungeeCord,
+                3 => ConnectionMode::Velocity {
+                    secret: Arc::from(config["server"]["secret"].as_str().unwrap_or("")),
+                },
+                _ => ConnectionMode::Online {
+                    prevent_proxy_connections: config["server"]["prevent_proxy_connections"]
+                        .as_bool()
+                        .unwrap_or(true),
+                },
+            },
+            ..Default::default()
+        })
+        .add_plugins(DefaultPlugins)
+        .insert_resource(server_config)
+        .add_systems(Startup, setup)
+        .add_systems(
+            Update,
+            (
+                despawn_disconnected_clients,
+                init_clients,
+                manage_players,
+                entity_interactions,
+                chat_message,
+                start_parkour,
+                manage_parkour,
+                apply_custom_skin,
+            ),
+        )
+        .run();
+}
+
+fn setup(
+    mut commands: Commands,
+    dimensions: Res<DimensionTypeRegistry>,
+    biomes: Res<BiomeRegistry>,
+    server: Res<Server>,
+    config: Res<ServerConfig>,
+) {
+    let layer = LayerBundle::new(ident!("overworld"), &dimensions, &biomes, &server);
+    let mut level = AnvilLevel::new(&config.world_path, &biomes);
+
+    for z in -3..3 {
+        for x in -3..3 {
+            let pos = ChunkPos::new(x, z);
+
+            level.ignored_chunks.insert(pos);
+            level.force_chunk_load(pos);
+        }
+    }
+
+    let layer_id = commands.spawn((layer, level)).id();
+
+    for npc in &config.npcs {
+        let npc_entity = commands
+            .spawn(PlayerEntityBundle {
+                layer: EntityLayerId(layer_id),
+                uuid: npc.uuid,
+                position: Position::new(npc.position.get()),
+                look: Look::new(180.0, 0.0),
+                head_yaw: npc.yaw,
+                ..PlayerEntityBundle::default()
+            })
+            .id();
+
+        commands.entity(npc_entity).insert(npc.clone());
+
+        commands.spawn(PlayerListEntryBundle {
+            uuid: npc.uuid,
+            username: Username(npc.name.0.to_string()),
+            display_name: DisplayName(npc.name.0.clone().color(Color::RED).into()),
+            listed: Listed(false),
+            ..Default::default()
+        });
+    }
+}
+
+fn init_clients(
+    mut clients: Query<
+        (
+            &mut EntityLayerId,
+            &mut VisibleChunkLayer,
+            &mut VisibleEntityLayers,
+            &mut Position,
+            &mut GameMode,
+        ),
+        Added<Client>,
+    >,
+    layers: Query<Entity, With<ChunkLayer>>,
+    config: Res<ServerConfig>,
+) {
+    for (
+        mut layer_id,
+        mut visible_chunk_layer,
+        mut visible_entity_layers,
+        mut pos,
+        mut game_mode,
+    ) in &mut clients
+    {
+        let layer = layers.single();
+
+        layer_id.0 = layer;
+        visible_chunk_layer.0 = layer;
+        visible_entity_layers.0.insert(layer);
+        pos.set(config.spawn_pos);
+        *game_mode = GameMode::Creative; //Adventure;
+    }
+}
+
+fn manage_players(
+    mut clients: Query<(&mut Client, &mut Position, &HeadYaw), With<Client>>,
+    mut layers: Query<&mut ChunkLayer>,
+    config: Res<ServerConfig>,
+) {
+    let layer = layers.single_mut();
+    for (mut client, mut pos, yaw) in clients.iter_mut() {
+        if pos.0.y < 0.0 {
+            pos.set([config.spawn_pos.x, config.spawn_pos.y, config.spawn_pos.z]);
+        }
+        match layer.block(BlockPos::new(
+            pos.0.x.floor() as i32,
+            pos.0.y.ceil() as i32 - 1,
+            pos.0.z.floor() as i32,
+        )) {
+            Some(block) => match block.state {
+                BlockState::SLIME_BLOCK => {
+                    client.play_sound(
+                        Sound::EntityFireworkRocketLaunch,
+                        SoundCategory::Master,
+                        pos.0,
+                        1.0,
+                        1.0,
+                    );
+                    let yaw = yaw.0.to_radians();
+                    client.set_velocity(Vec3::new(-yaw.sin() * 65.0, 30.0, yaw.cos() * 65.0));
+                }
+                _ => {}
+            },
+            None => {}
+        };
+    }
+}
+
+fn entity_interactions(
+    mut clients: Query<&mut Client, With<Client>>,
+    mut actions: Query<&NpcAction>,
+    mut events: EventReader<InteractEntityEvent>,
+) {
+    for event in events.read() {
+        match event.interact {
+            valence::prelude::EntityInteraction::Attack => {}
+            valence::prelude::EntityInteraction::Interact(hand) => {
+                if hand != Hand::Main {
+                    continue;
+                }
+            }
+            _ => continue,
+        }
+        let Ok(mut client) = clients.get_mut(event.client) else {
+            continue;
+        };
+        let Ok(action) = actions.get_mut(event.entity) else {
+            continue;
+        };
+
+        match action.command {
+            ActionType::Message => {
+                for arg in &action.args {
+                    client.send_chat_message(arg.clone().into_text().bold());
+                }
+            }
+            ActionType::Warp => {}
+            ActionType::None => {}
+        }
+    }
+}
+
+fn chat_message(
+    usernames: Query<&Username>,
+    mut clients: Query<&mut Client>,
+    mut events: EventReader<ChatMessageEvent>,
+) {
+    for event in events.read() {
+        let Ok(username) = usernames.get(event.client) else {
+            continue;
+        };
+        for mut client in clients.iter_mut() {
+            client.send_chat_message(
+                (String::new() + &username.0 + &String::from(": ") + &event.message.to_string())
+                    .color(Color::GRAY),
+            );
+        }
+    }
+}
+
+fn start_parkour(
+    mut query: Query<(Entity, &mut Client, &Position), Without<ParkourStatus>>,
+    mut commands: Commands,
+    config: Res<ServerConfig>,
+) {
+    for (entity, mut client, pos) in query.iter_mut() {
+        for parkour in &config.parkour {
+            if pos.0.floor() == parkour.start {
+                client.send_chat_message(
+                    (String::new() + &parkour.name + " started!")
+                        .into_text()
+                        .bold()
+                        .color(Color::GREEN),
+                );
+                commands.entity(entity).insert(ParkourStatus {
+                    name: parkour.name.clone(),
+                    start: SystemTime::now(),
+                    end: parkour.end,
+                });
+            }
+        }
+    }
+}
+
+fn manage_parkour(
+    mut query: Query<(Entity, &mut Client, &ParkourStatus, &Position), With<ParkourStatus>>,
+    mut commands: Commands,
+) {
+    for (entity, mut client, status, pos) in query.iter_mut() {
+        let time = &format!(
+            "{:.1}",
+            &status
+                .start
+                .elapsed()
+                .unwrap_or(Duration::new(0, 0))
+                .as_secs_f32()
+        );
+        client.set_action_bar(String::new() + &status.name + " - " + time + "s");
+        if pos.0.floor() == status.end {
+            client.send_chat_message(
+                (String::new() + &status.name + " completed in " + time + " seconds!")
+                    .into_text()
+                    .bold()
+                    .color(Color::GREEN),
+            );
+            commands.entity(entity).remove::<ParkourStatus>();
+        }
+    }
+}
+
+fn apply_custom_skin(
+    // This function is not working (SkinValue and SkinSignature are not found in the query)
+    mut query: Query<
+        (&SkinValue, &SkinSignature, &mut Properties),
+        (Added<Properties>, Without<Client>),
+    >,
+) {
+    for (skin, sign, mut props) in query.iter_mut() {
+        props.set_skin(skin.0.clone(), sign.0.clone());
+    }
+}
