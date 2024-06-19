@@ -8,7 +8,7 @@
         "secret": "mp8nykLkU7RE"
     },
     "world": {
-        "path": "C:\\Program Files\\MultiMC\\instances\\WorldEdit 1.20.1\\.minecraft\\saves\\MiniBit Lobby",
+        "path": "..\\worlds\\lobby",
         "spawn": [-19.5, 20.0, 61.5]
     },
     "parkour": [
