@@ -6,11 +6,7 @@ use std::{
 };
 
 use valence::{
-    entity::player::PlayerEntityBundle,
-    message::{ChatMessageEvent, SendMessage},
-    player_list::{DisplayName, Listed, PlayerListEntryBundle},
-    prelude::*,
-    protocol::{sound::SoundCategory, Sound},
+    entity::player::PlayerEntityBundle, message::{ChatMessageEvent, SendMessage}, player_list::{DisplayName, Listed, PlayerListEntryBundle}, prelude::*, protocol::{sound::SoundCategory, Sound}, CompressionThreshold, ServerSettings
 };
 use valence_anvil::AnvilLevel;
 
@@ -178,6 +174,10 @@ pub fn main() {
                         .unwrap_or(true),
                 },
             },
+            ..Default::default()
+        })
+        .insert_resource(ServerSettings {
+            compression_threshold: CompressionThreshold(-1),
             ..Default::default()
         })
         .add_plugins(DefaultPlugins)
