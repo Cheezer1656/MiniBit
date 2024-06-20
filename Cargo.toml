@@ -6,11 +6,8 @@ edition = "2021"
 [dependencies]
 json = "0.12.4"
 rand = "0.8.5"
-bevy = { version = "0.12", default-features = false, features = [
-    "dynamic_linking",
-] }
-valence = { git = "https://github.com/valence-rs/valence" }
-valence_anvil = { git = "https://github.com/valence-rs/valence" }
+valence = { git = "https://github.com/valence-rs/valence", rev = "db87e74bebc8226c75a84629b61f148b584df853" }
+valence_anvil = { git = "https://github.com/valence-rs/valence", rev = "db87e74bebc8226c75a84629b61f148b584df853" }
 
 [[bin]]
 name = "lobby_server"
