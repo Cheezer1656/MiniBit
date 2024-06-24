@@ -8,7 +8,11 @@
         "secret": ""
     },
     "world": {
-        "path": "../worlds/sumo1",
         "spawn": [0.5, 10.0, 0.5]
-    }
+    },
+    "worlds": [
+        {
+            "path": "../worlds/sumo1"
+        }
+    ]
 }

@@ -1,11 +1,9 @@
 #![allow(clippy::type_complexity)]
 
 use bevy_ecs::query::WorldQuery;
-use rand::seq::SliceRandom;
-use rand::thread_rng;
 use std::collections::{HashMap, HashSet};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::SystemTime;
 use valence::entity::living::Health;
@@ -19,13 +17,13 @@ use valence_anvil::AnvilLevel;
 
 #[derive(Resource)]
 struct ServerConfig {
-    world_path: PathBuf,
+    world_paths: Vec<PathBuf>,
     spawn_pos: DVec3,
 }
 
 #[derive(Resource)]
 struct ServerGlobals {
-    layer_id: Entity,
+    map_layers: Vec<Entity>,
     queue: Vec<Entity>,
 }
 
@@ -68,30 +66,27 @@ pub fn main() {
         return;
     };
 
-    if config["server"].is_null() || config["world"].is_null() {
+    if config["server"].is_null() || config["worlds"].is_null() {
         eprintln!("`server` or `world` key is missing in `config.json`. Exiting.");
         return;
     }
 
-    let world_path: PathBuf = match config["world"]["path"].as_str() {
-        Some(dir) => Path::new(dir).to_path_buf(),
-        None => {
-            eprintln!("`path` key is missing in `world` object in `config.json`. Exiting.");
+    let world_paths = config["worlds"]
+        .members()
+        .map(|v| PathBuf::from(v["path"].as_str().unwrap_or("")))
+        .collect::<Vec<PathBuf>>();
+
+    for world_path in world_paths.iter() {
+        if !world_path.exists() {
+            eprintln!(
+                "Directory `{}` does not exist. Exiting.",
+                world_path.display()
+            );
+            return;
+        } else if !world_path.is_dir() {
+            eprintln!("`{}` is not a directory. Exiting.", world_path.display());
             return;
         }
-    };
-
-    if !world_path.exists() {
-        eprintln!(
-            "Directory `{}` does not exist. Exiting.",
-            world_path.display()
-        );
-        return;
-    }
-
-    if !world_path.is_dir() {
-        eprintln!("`{}` is not a directory. Exiting.", world_path.display());
-        return;
     }
 
     let spawn_pos = config["world"]["spawn"]
@@ -100,7 +95,7 @@ pub fn main() {
         .collect::<Vec<f64>>();
 
     let server_config = ServerConfig {
-        world_path,
+        world_paths,
         spawn_pos: DVec3::new(spawn_pos[0], spawn_pos[1], spawn_pos[2]),
     };
 
@@ -163,22 +158,25 @@ fn setup(
     biomes: Res<BiomeRegistry>,
     config: Res<ServerConfig>,
 ) {
-    let layer = LayerBundle::new(ident!("overworld"), &dimensions, &biomes, &server);
-    let mut level = AnvilLevel::new(&config.world_path, &biomes);
+    let mut layers: Vec<Entity> = Vec::new();
+    for world_path in config.world_paths.iter() {
+        let layer = LayerBundle::new(ident!("overworld"), &dimensions, &biomes, &server);
+        let mut level = AnvilLevel::new(world_path, &biomes);
 
-    for z in -1..1 {
-        for x in -1..1 {
-            let pos = ChunkPos::new(x, z);
+        for z in -1..1 {
+            for x in -1..1 {
+                let pos = ChunkPos::new(x, z);
 
-            level.ignored_chunks.insert(pos);
-            level.force_chunk_load(pos);
+                level.ignored_chunks.insert(pos);
+                level.force_chunk_load(pos);
+            }
         }
+
+        layers.push(commands.spawn((layer, level)).id());
     }
 
-    let layer_id = commands.spawn((layer, level)).id();
-
     commands.insert_resource(ServerGlobals {
-        layer_id,
+        map_layers: layers,
         queue: Vec::new(),
     });
 }
@@ -211,7 +209,7 @@ fn init_clients(
         mut health,
     ) in clients.iter_mut()
     {
-        let Ok(layer) = layers.get(globals.layer_id) else {
+        let Ok(layer) = layers.get(globals.map_layers[0]) else {
             continue;
         };
 
@@ -270,7 +268,7 @@ fn check_queue(
     if globals.queue.len() < 2 {
         return;
     }
-    globals.queue.shuffle(&mut thread_rng());
+    fastrand::shuffle(&mut globals.queue);
     while globals.queue.len() > 1 {
         let entitylayer = commands.spawn(EntityLayer::new(&server)).id();
 
@@ -326,7 +324,9 @@ fn handle_combat_events(
             continue;
         };
 
-        if attacker.gamestate.game_id != victim.gamestate.game_id || server.current_tick() - victim.state.last_attacked_tick < 10 {
+        if attacker.gamestate.game_id != victim.gamestate.game_id
+            || server.current_tick() - victim.state.last_attacked_tick < 10
+        {
             continue;
         }
 
@@ -443,7 +443,9 @@ fn start_game(
         let Ok(chunk_id) = games.get(game_id) else {
             continue;
         };
-        let Ok(chunklayer) = chunklayers.get(globals.layer_id) else {
+        let Ok(chunklayer) =
+            chunklayers.get(globals.map_layers[fastrand::usize(..globals.map_layers.len())])
+        else {
             continue;
         };
         let Ok(entitylayer) = entitylayers.get(chunk_id.0) else {
@@ -499,8 +501,8 @@ fn end_game(
         let Ok(entitylayer_id) = games.get(game_id) else {
             continue;
         };
-        layer_id.0 = globals.layer_id;
-        visible_chunk_layer.0 = globals.layer_id;
+        layer_id.0 = globals.map_layers[0];
+        visible_chunk_layer.0 = globals.map_layers[0];
         visible_entity_layers.0.clear();
         visible_entity_layers.0.insert(entitylayer_id.0);
         pos.set(config.spawn_pos);
