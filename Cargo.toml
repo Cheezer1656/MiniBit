@@ -10,12 +10,16 @@ valence = { git = "https://github.com/valence-rs/valence", rev = "db87e74bebc822
 valence_anvil = { git = "https://github.com/valence-rs/valence", rev = "db87e74bebc8226c75a84629b61f148b584df853" }
 
 [[bin]]
-name = "lobby_server"
+name = "lobby"
 path = "src/lobby/lobby.rs"
 
 [[bin]]
-name = "sumo_server"
+name = "sumo"
 path = "src/sumo/sumo.rs"
+
+[[bin]]
+name = "parkour"
+path = "src/parkour/parkour.rs"
 
 [profile.dev]
 opt-level = 1
