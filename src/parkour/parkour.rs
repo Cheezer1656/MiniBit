@@ -5,7 +5,7 @@ use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use valence::prelude::*;
+use valence::{prelude::*, CompressionThreshold, ServerSettings};
 use valence::protocol::sound::{Sound, SoundCategory};
 use valence::spawn::IsFlat;
 
@@ -61,6 +61,10 @@ pub fn main() {
                         .unwrap_or(true),
                 },
             },
+            ..Default::default()
+        })
+        .insert_resource(ServerSettings {
+            compression_threshold: CompressionThreshold(-1),
             ..Default::default()
         })
         .add_plugins(DefaultPlugins)
