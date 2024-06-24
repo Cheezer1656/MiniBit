@@ -1,6 +1,8 @@
 #![allow(clippy::type_complexity)]
 
 use std::collections::VecDeque;
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use valence::prelude::*;
@@ -21,7 +23,46 @@ const BLOCK_TYPES: [BlockState; 7] = [
 ];
 
 pub fn main() {
+    let Ok(config) = std::fs::read_to_string("config.json") else {
+        eprintln!("Failed to read `config.json`. Exiting.");
+        return;
+    };
+    let Ok(config) = json::parse(&config) else {
+        eprintln!("Failed to parse `config.json`. Exiting.");
+        return;
+    };
+
+    if config["server"].is_null() {
+        eprintln!("`server` or `world` key is missing in `config.json`. Exiting.");
+        return;
+    }
+
     App::new()
+        .insert_resource(NetworkSettings {
+            address: SocketAddr::new(
+                config["server"]["ip"]
+                    .as_str()
+                    .unwrap_or("0.0.0.0")
+                    .parse()
+                    .unwrap_or(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0))),
+                config["server"]["port"].as_u16().unwrap_or(25565),
+            ),
+            max_players: config["server"]["max_players"].as_usize().unwrap_or(20),
+            max_connections: config["server"]["max_players"].as_usize().unwrap_or(20),
+            connection_mode: match config["server"]["connection_mode"].as_u8().unwrap_or(0) {
+                1 => ConnectionMode::Offline,
+                2 => ConnectionMode::BungeeCord,
+                3 => ConnectionMode::Velocity {
+                    secret: Arc::from(config["server"]["secret"].as_str().unwrap_or("")),
+                },
+                _ => ConnectionMode::Online {
+                    prevent_proxy_connections: config["server"]["prevent_proxy_connections"]
+                        .as_bool()
+                        .unwrap_or(true),
+                },
+            },
+            ..Default::default()
+        })
         .add_plugins(DefaultPlugins)
         .add_systems(
             Update,
@@ -66,7 +107,7 @@ fn init_clients(
         is_flat.0 = true;
         *game_mode = GameMode::Adventure;
 
-        client.send_chat_message("Welcome to epic infinite parkour game!".italic());
+        client.send_chat_message("Welcome to infinite parkour!".italic());
 
         let state = GameState {
             blocks: VecDeque::new(),
