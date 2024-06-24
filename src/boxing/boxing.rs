@@ -376,7 +376,7 @@ fn handle_combat_events(
         );
 
         victim.gamestate.hits += 1;
-        if victim.gamestate.hits >= 5 {
+        if victim.gamestate.hits >= 50 {
             losers.insert(victim.gamestate.game_id, victim_client);
         }
     }
