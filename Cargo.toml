@@ -21,6 +21,10 @@ path = "src/sumo/sumo.rs"
 name = "parkour"
 path = "src/parkour/parkour.rs"
 
+[[bin]]
+name = "boxing"
+path = "src/boxing/boxing.rs"
+
 [profile.dev]
 opt-level = 1
 

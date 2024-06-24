@@ -1,0 +1,18 @@
+{
+    "server": {
+        "ip": "127.0.0.1",
+        "port": 25569,
+        "motd": "A Minecraft Server",
+        "max_players": 50,
+        "connection_mode": 3,
+        "secret": ""
+    },
+    "world": {
+        "spawn": [0.5, 10.0, 0.5]
+    },
+    "worlds": [
+        {
+            "path": "../worlds/boxing1"
+        }
+    ]
+}
