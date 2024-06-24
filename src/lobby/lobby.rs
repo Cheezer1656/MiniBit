@@ -1,3 +1,5 @@
+#![allow(clippy::type_complexity)]
+
 use std::{
     net::{IpAddr, Ipv4Addr, SocketAddr},
     path::{Path, PathBuf},
@@ -6,7 +8,12 @@ use std::{
 };
 
 use valence::{
-    entity::player::PlayerEntityBundle, message::{ChatMessageEvent, SendMessage}, player_list::{DisplayName, Listed, PlayerListEntryBundle}, prelude::*, protocol::{sound::SoundCategory, Sound}, CompressionThreshold, ServerSettings
+    entity::player::PlayerEntityBundle,
+    message::{ChatMessageEvent, SendMessage},
+    player_list::{DisplayName, Listed, PlayerListEntryBundle},
+    prelude::*,
+    protocol::{sound::SoundCategory, Sound},
+    CompressionThreshold, ServerSettings,
 };
 use valence_anvil::AnvilLevel;
 
@@ -286,27 +293,24 @@ fn manage_players(
         if pos.0.y < 0.0 {
             pos.set([config.spawn_pos.x, config.spawn_pos.y, config.spawn_pos.z]);
         }
-        match layer.block(BlockPos::new(
+        let Some(block) = layer.block(BlockPos::new(
             pos.0.x.floor() as i32,
             pos.0.y.ceil() as i32 - 1,
             pos.0.z.floor() as i32,
-        )) {
-            Some(block) => match block.state {
-                BlockState::SLIME_BLOCK => {
-                    client.play_sound(
-                        Sound::EntityFireworkRocketLaunch,
-                        SoundCategory::Master,
-                        pos.0,
-                        1.0,
-                        1.0,
-                    );
-                    let yaw = yaw.0.to_radians();
-                    client.set_velocity(Vec3::new(-yaw.sin() * 65.0, 30.0, yaw.cos() * 65.0));
-                }
-                _ => {}
-            },
-            None => {}
+        )) else {
+            continue;
         };
+        if block.state == BlockState::SLIME_BLOCK {
+            client.play_sound(
+                Sound::EntityFireworkRocketLaunch,
+                SoundCategory::Master,
+                pos.0,
+                1.0,
+                1.0,
+            );
+            let yaw = yaw.0.to_radians();
+            client.set_velocity(Vec3::new(-yaw.sin() * 65.0, 30.0, yaw.cos() * 65.0));
+        }
     }
 }
 
@@ -363,7 +367,7 @@ fn chat_message(
         };
         for mut client in clients.iter_mut() {
             client.send_chat_message(
-                (String::new() + &username.0 + &String::from(": ") + &event.message.to_string())
+                (String::new() + &username.0 + &String::from(": ") + &event.message)
                     .color(Color::GRAY),
             );
         }

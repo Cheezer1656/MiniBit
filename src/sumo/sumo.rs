@@ -389,22 +389,20 @@ fn handle_oob_clients(
     }
     for (entity, mut client, gamestate) in clients.iter_mut() {
         if losers.contains_key(&gamestate.game_id) {
-            match losers.get(&gamestate.game_id) {
-                Some(loser) => {
-                    client.send_chat_message(format!(
-                        "{} died! Btw you have {} wins!",
-                        usernames
-                            .get(*loser)
-                            .unwrap_or(&Username(String::from("Unknown"))),
-                        gamestate.wins + if *loser == entity { 0 } else { 1 }
-                    ));
-                    end_game.send(EndGameEvent {
-                        entity,
-                        loser: *loser,
-                    });
-                }
-                _ => {}
-            }
+            let Some(loser) = losers.get(&gamestate.game_id) else {
+                continue;
+            };
+            client.send_chat_message(format!(
+                "{} died! Btw you have {} wins!",
+                usernames
+                    .get(*loser)
+                    .unwrap_or(&Username(String::from("Unknown"))),
+                gamestate.wins + if *loser == entity { 0 } else { 1 }
+            ));
+            end_game.send(EndGameEvent {
+                entity,
+                loser: *loser,
+            });
         }
     }
 }
@@ -609,10 +607,7 @@ fn chat_message(
         for (mut client, gamestate) in clients.iter_mut() {
             if gamestate.game_id == sender_gamestate.game_id {
                 client.send_chat_message(
-                    (String::new()
-                        + &sender_name.0
-                        + &String::from(": ")
-                        + &event.message.to_string())
+                    (String::new() + &sender_name.0 + &String::from(": ") + &event.message)
                         .color(Color::GRAY),
                 );
             }
