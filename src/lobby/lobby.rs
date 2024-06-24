@@ -272,7 +272,7 @@ fn init_clients(
         visible_chunk_layer.0 = layer;
         visible_entity_layers.0.insert(layer);
         pos.set(config.spawn_pos);
-        *game_mode = GameMode::Creative; //Adventure;
+        *game_mode = GameMode::Adventure;
     }
 }
 
@@ -345,7 +345,6 @@ fn entity_interactions(
                 payload.extend_from_slice(uuid.0.to_string().as_bytes());
                 payload.push(0);
                 payload.extend_from_slice(action.args[0].as_bytes());
-                // println!("{:?}", String::from_utf8(payload.clone()).unwrap());
                 client.send_custom_payload(ident!("minibit:main"), &payload);
             }
             ActionType::None => {}
