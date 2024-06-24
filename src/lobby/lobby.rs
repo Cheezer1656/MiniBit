@@ -311,7 +311,7 @@ fn manage_players(
 }
 
 fn entity_interactions(
-    mut clients: Query<&mut Client, With<Client>>,
+    mut clients: Query<(&mut Client, &Username), With<Client>>,
     mut actions: Query<&NpcAction>,
     mut events: EventReader<InteractEntityEvent>,
 ) {
@@ -325,7 +325,7 @@ fn entity_interactions(
             }
             _ => continue,
         }
-        let Ok(mut client) = clients.get_mut(event.client) else {
+        let Ok((mut client, uuid)) = clients.get_mut(event.client) else {
             continue;
         };
         let Ok(action) = actions.get_mut(event.entity) else {
@@ -338,7 +338,16 @@ fn entity_interactions(
                     client.send_chat_message(arg.clone().into_text().bold());
                 }
             }
-            ActionType::Warp => {}
+            ActionType::Warp => {
+                let mut payload: Vec<u8> = Vec::new();
+                payload.extend_from_slice("1".as_bytes());
+                payload.push(0);
+                payload.extend_from_slice(uuid.0.to_string().as_bytes());
+                payload.push(0);
+                payload.extend_from_slice(action.args[0].as_bytes());
+                // println!("{:?}", String::from_utf8(payload.clone()).unwrap());
+                client.send_custom_payload(ident!("minibit:main"), &payload);
+            }
             ActionType::None => {}
         }
     }

@@ -12,7 +12,7 @@ use valence::entity::living::Health;
 use valence::entity::{EntityId, EntityStatuses};
 use valence::math::Vec3Swizzles;
 use valence::message::ChatMessageEvent;
-use valence::prelude::*;
+use valence::{prelude::*, CompressionThreshold, ServerSettings};
 use valence::protocol::sound::SoundCategory;
 use valence::protocol::Sound;
 use valence_anvil::AnvilLevel;
@@ -128,6 +128,10 @@ pub fn main() {
                         .unwrap_or(true),
                 },
             },
+            ..Default::default()
+        })
+        .insert_resource(ServerSettings {
+            compression_threshold: CompressionThreshold(-1),
             ..Default::default()
         })
         .add_plugins(DefaultPlugins)

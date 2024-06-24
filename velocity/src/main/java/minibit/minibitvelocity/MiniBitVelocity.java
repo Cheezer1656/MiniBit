@@ -7,12 +7,16 @@ import com.velocitypowered.api.event.connection.PluginMessageEvent;
 import com.velocitypowered.api.event.proxy.ProxyInitializeEvent;
 import com.velocitypowered.api.event.Subscribe;
 import com.velocitypowered.api.plugin.Plugin;
+import com.velocitypowered.api.proxy.Player;
 import com.velocitypowered.api.proxy.ProxyServer;
 import com.velocitypowered.api.proxy.ServerConnection;
 import com.velocitypowered.api.proxy.messages.MinecraftChannelIdentifier;
+import com.velocitypowered.api.proxy.server.RegisteredServer;
+import net.kyori.adventure.text.Component;
 import org.slf4j.Logger;
 
-import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
+import java.util.Optional;
 
 @Plugin(
         id = "minibit",
@@ -46,8 +50,22 @@ public class MiniBitVelocity {
         }
 
         ByteArrayDataInput in = ByteStreams.newDataInput(event.getData());
-        String message = in.readUTF();
-        logger.info("Received message from backend: " + message);
-        backend.sendPluginMessage(IDENTIFIER, message.getBytes());
+        String[] data = in.readLine().split("\0");
+        int type = Integer.valueOf(data[0]);
+        if (type == 1) {
+            Optional<Player> player_op = server.getPlayer(data[1]);
+            if (player_op.isPresent() && player_op.get().getCurrentServer().isPresent()) {
+                Player player = player_op.get();
+                ServerConnection connection = player.getCurrentServer().get();
+                Optional<RegisteredServer> server2 = server.getServer(data[2]);
+                if (connection.getServer().toString() == data[2]) {
+                    player.sendMessage(Component.text("You're already in that server!"));
+                } else if (server2.isPresent()) {
+                    player.createConnectionRequest(server2.get()).fireAndForget();
+                } else {
+                    player.sendMessage(Component.text("That server was not found!"));
+                }
+            }
+        }
     }
 }
