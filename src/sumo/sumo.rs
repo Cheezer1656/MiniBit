@@ -12,9 +12,9 @@ use valence::entity::living::Health;
 use valence::entity::{EntityId, EntityStatuses};
 use valence::math::Vec3Swizzles;
 use valence::message::ChatMessageEvent;
-use valence::{prelude::*, CompressionThreshold, ServerSettings};
 use valence::protocol::sound::SoundCategory;
 use valence::protocol::Sound;
+use valence::{prelude::*, CompressionThreshold, ServerSettings};
 use valence_anvil::AnvilLevel;
 
 #[derive(Resource)]
@@ -264,8 +264,6 @@ fn check_queue(
     mut start_game: EventWriter<StartGameEvent>,
     mut clients: Query<&mut PlayerGameState>,
     server: Res<Server>,
-    dimensions: Res<DimensionTypeRegistry>,
-    biomes: Res<BiomeRegistry>,
     mut commands: Commands,
     mut globals: ResMut<ServerGlobals>,
 ) {
@@ -274,14 +272,7 @@ fn check_queue(
     }
     globals.queue.shuffle(&mut thread_rng());
     while globals.queue.len() > 1 {
-        let entitylayer = commands
-            .spawn(LayerBundle::new(
-                ident!("overworld"),
-                &dimensions,
-                &biomes,
-                &server,
-            ))
-            .id();
+        let entitylayer = commands.spawn(EntityLayer::new(&server)).id();
 
         let game_id = commands
             .spawn(Game {
@@ -309,6 +300,7 @@ struct CombatQuery {
     pos: &'static Position,
     state: &'static mut CombatState,
     statuses: &'static mut EntityStatuses,
+    gamestate: &'static PlayerGameState,
 }
 
 fn handle_combat_events(
@@ -334,7 +326,7 @@ fn handle_combat_events(
             continue;
         };
 
-        if server.current_tick() - victim.state.last_attacked_tick < 10 {
+        if attacker.gamestate.game_id != victim.gamestate.game_id || server.current_tick() - victim.state.last_attacked_tick < 10 {
             continue;
         }
 
