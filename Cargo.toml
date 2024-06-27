@@ -25,6 +25,10 @@ path = "src/parkour/parkour.rs"
 name = "boxing"
 path = "src/boxing/boxing.rs"
 
+[[bin]]
+name = "bowfight"
+path = "src/bowfight/bowfight.rs"
+
 [profile.dev]
 opt-level = 1
 
