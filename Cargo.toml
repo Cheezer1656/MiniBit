@@ -11,23 +11,23 @@ valence_anvil = { git = "https://github.com/valence-rs/valence", rev = "db87e74b
 
 [[bin]]
 name = "lobby"
-path = "src/lobby/lobby.rs"
+path = "src/bin/lobby.rs"
 
 [[bin]]
 name = "sumo"
-path = "src/sumo/sumo.rs"
+path = "src/bin/sumo.rs"
 
 [[bin]]
 name = "parkour"
-path = "src/parkour/parkour.rs"
+path = "src/bin/parkour.rs"
 
 [[bin]]
 name = "boxing"
-path = "src/boxing/boxing.rs"
+path = "src/bin/boxing.rs"
 
 [[bin]]
 name = "bowfight"
-path = "src/bowfight/bowfight.rs"
+path = "src/bin/bowfight.rs"
 
 [profile.dev]
 opt-level = 1
