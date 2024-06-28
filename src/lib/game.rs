@@ -21,7 +21,7 @@ pub struct Game {
     pub game_stage: GameStage,
 }
 
-#[derive(Component)]
+#[derive(Component, Default)]
 pub struct PlayerGameState {
     pub game_id: Option<Entity>,
     pub team: u8,
@@ -117,14 +117,9 @@ pub fn init_clients(
         pos.set(config.spawn_pos);
         *game_mode = GameMode::Adventure;
         health.0 = 20.0;
-        commands.entity(entity).insert((
-            PlayerGameState {
-                game_id: None,
-                team: 0,
-                wins: 0,
-            },
-            CombatState::default(),
-        ));
+        commands
+            .entity(entity)
+            .insert((PlayerGameState::default(), CombatState::default()));
 
         globals.queue.push(entity);
     }

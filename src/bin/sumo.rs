@@ -1,13 +1,11 @@
 #![allow(clippy::type_complexity)]
 
-#[path = "../libs/config.rs"]
-mod config;
-#[path = "../libs/game.rs"]
-mod game;
+#[path = "../lib/mod.rs"]
+mod lib;
 
 use bevy_ecs::query::WorldQuery;
-use config::*;
-use game::*;
+use lib::config::*;
+use lib::game::*;
 use valence::entity::{EntityId, EntityStatuses};
 use valence::math::Vec3Swizzles;
 use valence::protocol::sound::SoundCategory;
