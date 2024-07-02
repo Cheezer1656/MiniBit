@@ -67,7 +67,7 @@ fn start_game(
             for entity in entities.0.iter() {
                 if let Ok(mut inventory) = clients.get_mut(*entity) {
                     inventory.set_slot(36, ItemStack::new(ItemKind::Bow, 1, None));
-                    inventory.set_slot(36, ItemStack::new(ItemKind::Bow, 1, None));
+                    inventory.set_slot(36, ItemStack::new(ItemKind::Arrow, 10, None));
                 }
             }
         }
@@ -84,7 +84,7 @@ fn end_game(
             for entity in entities.0.iter() {
                 if let Ok(mut inv) = clients.get_mut(*entity) {
                     for slot in 0..inv.slot_count() {
-                        inv.set_slot(slot, ItemStack::new(ItemKind::Air, 0, None));
+                        inv.set_slot(slot, ItemStack::EMPTY);
                     }
                 }
             }
