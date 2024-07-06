@@ -6,8 +6,8 @@ edition = "2021"
 [dependencies]
 fastrand = "2.1.0"
 json = "0.12.4"
-valence = { git = "https://github.com/valence-rs/valence" }
-valence_anvil = { git = "https://github.com/valence-rs/valence" }
+valence = { git = "https://github.com/Cheezer1656/valence", branch = "custom" }
+valence_anvil = { git = "https://github.com/Cheezer1656/valence", branch = "custom" }
 
 [[bin]]
 name = "lobby"
