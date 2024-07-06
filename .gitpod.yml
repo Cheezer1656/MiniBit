@@ -6,3 +6,8 @@
 
 tasks:
   - init: cargo build --bins
+
+ports:
+  - name: Server
+    port: 25565
+    onOpen: ignore
