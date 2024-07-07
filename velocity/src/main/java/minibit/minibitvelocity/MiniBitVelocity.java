@@ -3,6 +3,8 @@ package minibit.minibitvelocity;
 import com.google.common.io.ByteArrayDataInput;
 import com.google.common.io.ByteStreams;
 import com.google.inject.Inject;
+import com.velocitypowered.api.command.CommandManager;
+import com.velocitypowered.api.command.CommandMeta;
 import com.velocitypowered.api.event.connection.PluginMessageEvent;
 import com.velocitypowered.api.event.proxy.ProxyInitializeEvent;
 import com.velocitypowered.api.event.Subscribe;
@@ -12,10 +14,10 @@ import com.velocitypowered.api.proxy.ProxyServer;
 import com.velocitypowered.api.proxy.ServerConnection;
 import com.velocitypowered.api.proxy.messages.MinecraftChannelIdentifier;
 import com.velocitypowered.api.proxy.server.RegisteredServer;
+import minibit.minibitvelocity.commands.LobbyCommand;
 import net.kyori.adventure.text.Component;
 import org.slf4j.Logger;
 
-import java.util.Arrays;
 import java.util.Optional;
 
 @Plugin(
@@ -38,6 +40,14 @@ public class MiniBitVelocity {
     @Subscribe
     public void onProxyInitialization(ProxyInitializeEvent event) {
         server.getChannelRegistrar().register(IDENTIFIER);
+
+        CommandManager commandManager = server.getCommandManager();
+        CommandMeta commandMeta = commandManager.metaBuilder("lobby")
+                .aliases("l")
+                .plugin(this)
+                .build();
+
+        commandManager.register(commandMeta, new LobbyCommand(server));
     }
 
     @Subscribe
