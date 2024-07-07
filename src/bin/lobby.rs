@@ -26,6 +26,14 @@ enum ActionType {
     Warp,
     None,
 }
+
+#[derive(Event)]
+struct ActionEvent {
+    entity: Entity,
+    action: ActionType,
+    args: Vec<String>,
+}
+
 #[derive(Component, Clone)]
 struct NpcAction {
     command: ActionType,
@@ -197,7 +205,10 @@ pub fn main() {
         })
         .add_plugins(DefaultPlugins)
         .insert_resource(server_config)
-        .insert_resource(ServerGlobals { navigator_gui: None })
+        .insert_resource(ServerGlobals {
+            navigator_gui: None,
+        })
+        .add_event::<ActionEvent>()
         .add_systems(Startup, setup)
         .add_systems(EventLoopUpdate, item_interactions)
         .add_systems(
@@ -211,6 +222,7 @@ pub fn main() {
                 start_parkour,
                 manage_parkour,
                 apply_custom_skin,
+                execute_action,
             ),
         )
         .run();
@@ -263,7 +275,11 @@ fn setup(
 
     globals.navigator_gui = Some(
         commands
-            .spawn(Inventory::with_title(InventoryKind::Generic9x6, "Server Navigator"))
+            .spawn(Inventory::with_title(
+                InventoryKind::Generic9x6,
+                "Server Navigator",
+                false,
+            ))
             .id(),
     );
 }
@@ -350,9 +366,9 @@ fn manage_players(
 }
 
 fn entity_interactions(
-    mut clients: Query<(&mut Client, &Username), With<Client>>,
-    mut actions: Query<&NpcAction>,
+    actions: Query<&NpcAction>,
     mut events: EventReader<InteractEntityEvent>,
+    mut action_event: EventWriter<ActionEvent>,
 ) {
     for event in events.read() {
         match event.interact {
@@ -364,30 +380,15 @@ fn entity_interactions(
             }
             _ => continue,
         }
-        let Ok((mut client, uuid)) = clients.get_mut(event.client) else {
-            continue;
-        };
-        let Ok(action) = actions.get_mut(event.entity) else {
+        let Ok(action) = actions.get(event.entity) else {
             continue;
         };
 
-        match action.command {
-            ActionType::Message => {
-                for arg in &action.args {
-                    client.send_chat_message(arg.clone().into_text().bold());
-                }
-            }
-            ActionType::Warp => {
-                let mut payload: Vec<u8> = Vec::new();
-                payload.extend_from_slice("1".as_bytes());
-                payload.push(0);
-                payload.extend_from_slice(uuid.0.to_string().as_bytes());
-                payload.push(0);
-                payload.extend_from_slice(action.args[0].as_bytes());
-                client.send_custom_payload(ident!("minibit:main"), &payload);
-            }
-            ActionType::None => {}
-        }
+        action_event.send(ActionEvent {
+            entity: event.client,
+            action: action.command.clone(),
+            args: action.args.clone(),
+        });
     }
 }
 
@@ -402,12 +403,14 @@ fn item_interactions(
             if let Ok((entity, mut inv, item)) = clients.get_mut(packet.client) {
                 match inv.slot(item.slot()).item {
                     ItemKind::Compass => {
-                        commands.entity(entity).insert(OpenInventory::new(globals.navigator_gui.unwrap()));
-                    },
+                        commands
+                            .entity(entity)
+                            .insert(OpenInventory::new(globals.navigator_gui.unwrap()));
+                    }
                     ItemKind::Barrier => {
                         commands.entity(entity).remove::<ParkourStatus>();
                         inv.set_slot(item.slot(), ItemStack::EMPTY);
-                    },
+                    }
                     _ => {}
                 }
             }
@@ -504,5 +507,32 @@ fn apply_custom_skin(
 ) {
     for (skin, sign, mut props) in query.iter_mut() {
         props.set_skin(skin.0.clone(), sign.0.clone());
+    }
+}
+
+fn execute_action(
+    mut events: EventReader<ActionEvent>,
+    mut clients: Query<(&mut Client, &Username)>,
+) {
+    for event in events.read() {
+        if let Ok((mut client, username)) = clients.get_mut(event.entity) {
+            match event.action {
+                ActionType::Message => {
+                    for arg in &event.args {
+                        client.send_chat_message(arg.clone().into_text().bold());
+                    }
+                }
+                ActionType::Warp => {
+                    let mut payload: Vec<u8> = Vec::new();
+                    payload.extend_from_slice("1".as_bytes());
+                    payload.push(0);
+                    payload.extend_from_slice(username.0.to_string().as_bytes());
+                    payload.push(0);
+                    payload.extend_from_slice(event.args[0].as_bytes());
+                    client.send_custom_payload(ident!("minibit:main"), &payload);
+                }
+                ActionType::None => {}
+            }
+        }
     }
 }
