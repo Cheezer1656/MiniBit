@@ -4,6 +4,7 @@
     <modules>
       <module fileurl="file://$PROJECT_DIR$/.idea/modules/MiniBitVelocity.main.iml" filepath="$PROJECT_DIR$/.idea/modules/MiniBitVelocity.main.iml" />
       <module fileurl="file://$PROJECT_DIR$/.idea/modules/minibit.MiniBitVelocity.main.iml" filepath="$PROJECT_DIR$/.idea/modules/minibit.MiniBitVelocity.main.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/velocity.MiniBitVelocity.main.iml" filepath="$PROJECT_DIR$/.idea/modules/velocity.MiniBitVelocity.main.iml" />
     </modules>
   </component>
 </project>
