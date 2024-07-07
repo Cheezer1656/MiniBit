@@ -8,11 +8,14 @@ use std::{
 };
 
 use valence::{
-    entity::player::PlayerEntityBundle,
+    entity::{living::Health, player::PlayerEntityBundle},
+    event_loop::PacketEvent,
+    inventory::HeldItem,
     message::{ChatMessageEvent, SendMessage},
+    nbt::compound,
     player_list::{DisplayName, Listed, PlayerListEntryBundle},
     prelude::*,
-    protocol::{sound::SoundCategory, Sound},
+    protocol::{packets::play::PlayerInteractItemC2s, sound::SoundCategory, Sound},
     CompressionThreshold, ServerSettings,
 };
 use valence_anvil::AnvilLevel;
@@ -59,6 +62,11 @@ struct ServerConfig {
     spawn_pos: DVec3,
     npcs: Vec<NpcConfig>,
     parkour: Vec<ParkourConfig>,
+}
+
+#[derive(Resource)]
+struct ServerGlobals {
+    navigator_gui: Option<Entity>,
 }
 
 #[derive(Component)]
@@ -189,7 +197,9 @@ pub fn main() {
         })
         .add_plugins(DefaultPlugins)
         .insert_resource(server_config)
+        .insert_resource(ServerGlobals { navigator_gui: None })
         .add_systems(Startup, setup)
+        .add_systems(EventLoopUpdate, item_interactions)
         .add_systems(
             Update,
             (
@@ -212,6 +222,7 @@ fn setup(
     biomes: Res<BiomeRegistry>,
     server: Res<Server>,
     config: Res<ServerConfig>,
+    mut globals: ResMut<ServerGlobals>,
 ) {
     let layer = LayerBundle::new(ident!("overworld"), &dimensions, &biomes, &server);
     let mut level = AnvilLevel::new(&config.world_path, &biomes);
@@ -249,6 +260,12 @@ fn setup(
             ..Default::default()
         });
     }
+
+    globals.navigator_gui = Some(
+        commands
+            .spawn(Inventory::with_title(InventoryKind::Generic9x6, "Server Navigator"))
+            .id(),
+    );
 }
 
 fn init_clients(
@@ -259,6 +276,8 @@ fn init_clients(
             &mut VisibleEntityLayers,
             &mut Position,
             &mut GameMode,
+            &mut Health,
+            &mut Inventory,
         ),
         Added<Client>,
     >,
@@ -271,6 +290,8 @@ fn init_clients(
         mut visible_entity_layers,
         mut pos,
         mut game_mode,
+        mut health,
+        mut inv,
     ) in &mut clients
     {
         let layer = layers.single();
@@ -280,6 +301,20 @@ fn init_clients(
         visible_entity_layers.0.insert(layer);
         pos.set(config.spawn_pos);
         *game_mode = GameMode::Adventure;
+        health.0 = 20.0;
+
+        inv.set_slot(
+            36,
+            ItemStack::new(
+                ItemKind::Compass,
+                1,
+                Some(compound! {
+                    "display" => compound! {
+                        "Name" => "{\"text\":\"Navigator\",\"italic\":false}"
+                    },
+                }),
+            ),
+        )
     }
 }
 
@@ -356,6 +391,30 @@ fn entity_interactions(
     }
 }
 
+fn item_interactions(
+    mut clients: Query<(Entity, &mut Inventory, &HeldItem), With<Client>>,
+    mut packets: EventReader<PacketEvent>,
+    mut commands: Commands,
+    globals: Res<ServerGlobals>,
+) {
+    for packet in packets.read() {
+        if let Some(_pkt) = packet.decode::<PlayerInteractItemC2s>() {
+            if let Ok((entity, mut inv, item)) = clients.get_mut(packet.client) {
+                match inv.slot(item.slot()).item {
+                    ItemKind::Compass => {
+                        commands.entity(entity).insert(OpenInventory::new(globals.navigator_gui.unwrap()));
+                    },
+                    ItemKind::Barrier => {
+                        commands.entity(entity).remove::<ParkourStatus>();
+                        inv.set_slot(item.slot(), ItemStack::EMPTY);
+                    },
+                    _ => {}
+                }
+            }
+        }
+    }
+}
+
 fn chat_message(
     usernames: Query<&Username>,
     mut clients: Query<&mut Client>,
@@ -375,11 +434,11 @@ fn chat_message(
 }
 
 fn start_parkour(
-    mut query: Query<(Entity, &mut Client, &Position), Without<ParkourStatus>>,
+    mut query: Query<(Entity, &mut Client, &mut Inventory, &Position), Without<ParkourStatus>>,
     mut commands: Commands,
     config: Res<ServerConfig>,
 ) {
-    for (entity, mut client, pos) in query.iter_mut() {
+    for (entity, mut client, mut inv, pos) in query.iter_mut() {
         for parkour in &config.parkour {
             if pos.0.floor() == parkour.start {
                 client.send_chat_message(
@@ -393,6 +452,18 @@ fn start_parkour(
                     start: SystemTime::now(),
                     end: parkour.end,
                 });
+                inv.set_slot(
+                    44,
+                    ItemStack::new(
+                        ItemKind::Barrier,
+                        1,
+                        Some(compound! {
+                            "display" => compound! {
+                                "Name" => "{\"text\":\"Cancel Parkour\",\"italic\":false}"
+                            },
+                        }),
+                    ),
+                );
             }
         }
     }
