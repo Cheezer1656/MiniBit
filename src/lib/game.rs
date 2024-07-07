@@ -246,6 +246,7 @@ pub fn end_game(
         &mut VisibleChunkLayer,
         &mut VisibleEntityLayers,
         &mut Position,
+        &mut Health,
     )>,
     games: Query<(&EntityLayerId, &Entities), Without<PlayerGameState>>,
     mut end_game: EventReader<EndGameEvent>,
@@ -265,6 +266,7 @@ pub fn end_game(
                 mut visible_chunk_layer,
                 mut visible_entity_layers,
                 mut pos,
+                mut health,
             )) = clients.get_mut(*entity)
             else {
                 continue;
@@ -274,6 +276,7 @@ pub fn end_game(
             visible_entity_layers.0.clear();
             visible_entity_layers.0.insert(globals.map_layers[0]);
             pos.set(config.spawn_pos);
+            health.0 = 20.0;
 
             if gamestate.team == event.loser {
                 client.send_chat_message("You lost!");
