@@ -6,6 +6,7 @@ mod lib;
 use bevy_ecs::query::WorldQuery;
 use lib::config::*;
 use lib::game::*;
+use valence::entity::arrow::ArrowEntity;
 use valence::entity::arrow::ArrowEntityBundle;
 use valence::entity::living::Health;
 use valence::entity::Velocity;
@@ -38,7 +39,10 @@ pub fn main() {
         .add_event::<StartGameEvent>()
         .add_event::<EndGameEvent>()
         .add_systems(Startup, setup)
-        .add_systems(EventLoopUpdate, (handle_combat_events, handle_player_action))
+        .add_systems(
+            EventLoopUpdate,
+            (handle_combat_events, handle_player_action),
+        )
         .add_systems(
             Update,
             (
@@ -51,6 +55,7 @@ pub fn main() {
                 end_game.after(lib::game::end_game),
                 gameloop.after(start_game),
                 chat_message,
+                handle_arrow_physics,
             ),
         )
         .add_systems(PostUpdate, (handle_disconnect, check_queue))
@@ -67,7 +72,7 @@ fn start_game(
             for entity in entities.0.iter() {
                 if let Ok(mut inventory) = clients.get_mut(*entity) {
                     inventory.set_slot(36, ItemStack::new(ItemKind::Bow, 1, None));
-                    inventory.set_slot(36, ItemStack::new(ItemKind::Arrow, 10, None));
+                    inventory.set_slot(44, ItemStack::new(ItemKind::Arrow, 10, None));
                 }
             }
         }
@@ -225,7 +230,7 @@ fn handle_player_action(
                     -rad_yaw.sin() * hspeed,
                     -rad_pitch.sin(),
                     rad_yaw.cos() * hspeed,
-                )*10.0;
+                ) * 30.0;
                 let dir = vel.normalize().as_dvec3() * 0.5;
                 println!("Vel: {:?}, Dir: {:?}", vel, dir);
                 commands.spawn(ArrowEntityBundle {
@@ -245,6 +250,42 @@ fn handle_player_action(
     }
 }
 
+fn handle_arrow_physics(
+    mut arrows: Query<(&mut Position, &mut Velocity), With<ArrowEntity>>,
+    mut clients: Query<
+        (&PlayerGameState, &Position, &mut Health),
+        (With<Client>, Without<ArrowEntity>),
+    >,
+    mut endgame: EventWriter<EndGameEvent>,
+) {
+    for (mut pos, mut velocity) in arrows.iter_mut() {
+        pos.0 += DVec3::from(velocity.0) / 20.0;
+
+        //add gravity
+        velocity.0.y -= 20.0 / 20.0;
+
+        //air friction
+        velocity.0 *= 1.0 - (0.99 / 20.0);
+        for (gamestate, player_pos, mut health) in clients.iter_mut() {
+            if (pos.0.x - player_pos.0.x).abs() < 0.3
+                && (pos.0.z - player_pos.0.z).abs() < 0.3
+                && (pos.0.y - player_pos.0.y) < 1.8
+                && (pos.0.y - player_pos.0.y) > 0.0
+            {
+                if health.0 <= 1.0 {
+                    endgame.send(EndGameEvent {
+                        game_id: gamestate.game_id.unwrap(),
+                        loser: gamestate.team,
+                    });
+                } else {
+                    health.0 -= 1.0;
+                }
+                
+            }
+        }
+    }
+}
+
 fn handle_oob_clients(
     mut positions: Query<(&mut Position, &PlayerGameState), With<Client>>,
     mut end_game: EventWriter<EndGameEvent>,
@@ -256,7 +297,7 @@ fn handle_oob_clients(
             if gamestate.game_id.is_some() {
                 end_game.send(EndGameEvent {
                     game_id: gamestate.game_id.unwrap(),
-                    loser: gamestate.team
+                    loser: gamestate.team,
                 });
             }
         }
