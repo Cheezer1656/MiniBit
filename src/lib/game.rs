@@ -1,7 +1,13 @@
-use crate::ServerConfig;
+use crate::{load_config, ServerConfig};
 use bevy_ecs::query::WorldQuery;
 use std::time::SystemTime;
-use valence::{entity::living::Health, message::ChatMessageEvent, prelude::*};
+use valence::{
+    entity::living::Health,
+    message::ChatMessageEvent,
+    prelude::*,
+    protocol::{sound::SoundCategory, Sound},
+    CompressionThreshold, ServerSettings,
+};
 use valence_anvil::AnvilLevel;
 
 #[derive(Component)]
@@ -43,10 +49,51 @@ pub struct EndGameEvent {
     pub loser: u8,
 }
 
+#[derive(Event)]
+pub struct GameStageEvent {
+    pub game_id: Entity,
+    pub stage: u8,
+}
+
 #[derive(Resource)]
 pub struct ServerGlobals {
     pub map_layers: Vec<Entity>,
     pub queue: Vec<Entity>,
+}
+
+pub fn register_defaults(app: &mut App) -> Result<&mut App, &'static str> {
+    let config = match load_config() {
+        Ok(config) => config,
+        Err(e) => {
+            return Err(e);
+        }
+    };
+
+    return Ok(app
+        .insert_resource(config.0)
+        .insert_resource(ServerSettings {
+            compression_threshold: CompressionThreshold(-1),
+            ..Default::default()
+        })
+        .add_plugins(DefaultPlugins)
+        .insert_resource(config.1)
+        .add_event::<StartGameEvent>()
+        .add_event::<EndGameEvent>()
+        .add_event::<GameStageEvent>()
+        .add_systems(Startup, setup)
+        .add_systems(
+            Update,
+            (
+                init_clients,
+                despawn_disconnected_clients,
+                start_game.after(init_clients),
+                end_game,
+                gameloop.after(start_game),
+                gamestage_change.after(gameloop),
+                chat_message,
+            ),
+        )
+        .add_systems(PostUpdate, (handle_disconnect, check_queue)));
 }
 
 pub fn setup(
@@ -308,6 +355,7 @@ pub struct GameQuery {
 pub fn gameloop(
     mut clients: Query<GameQuery>,
     mut games: Query<(Entity, &mut GameStage, &GameTime)>,
+    mut gamestage: EventWriter<GameStageEvent>,
     config: Res<ServerConfig>,
 ) {
     for (game_id, mut stage, time) in games.iter_mut() {
@@ -337,6 +385,7 @@ pub fn gameloop(
                 }
             }
             stage.0 = 1;
+            gamestage.send(GameStageEvent { game_id, stage: 1 });
         } else if stage.0 == 1
             && time
                 .0
@@ -351,6 +400,7 @@ pub fn gameloop(
                 }
             }
             stage.0 = 2;
+            gamestage.send(GameStageEvent { game_id, stage: 2 });
         } else if stage.0 == 2
             && time
                 .0
@@ -365,6 +415,7 @@ pub fn gameloop(
                 }
             }
             stage.0 = 3;
+            gamestage.send(GameStageEvent { game_id, stage: 3 });
         } else if stage.0 == 3
             && time
                 .0
@@ -379,6 +430,7 @@ pub fn gameloop(
                 }
             }
             stage.0 = 4;
+            gamestage.send(GameStageEvent { game_id, stage: 4 });
         } else if stage.0 == 4
             && time
                 .0
@@ -393,6 +445,47 @@ pub fn gameloop(
                 }
             }
             stage.0 = 5;
+            gamestage.send(GameStageEvent { game_id, stage: 5 });
+        }
+    }
+}
+
+pub fn gamestage_change(
+    mut clients: Query<(&mut Client, &Position)>,
+    games: Query<&Entities>,
+    mut gamestage: EventReader<GameStageEvent>,
+) {
+    for event in gamestage.read() {
+        if let Ok(entities) = games.get(event.game_id) {
+            for entity in entities.0.iter() {
+                if let Ok((mut client, pos)) = clients.get_mut(*entity) {
+                    match event.stage {
+                        1 => client.set_title("3".color(Color::GREEN)),
+                        2 => client.set_title("2".color(Color::GOLD)),
+                        3 => client.set_title("1".color(Color::RED)),
+                        4 => client.set_title("GO!".color(Color::RED)),
+                        5 => client.clear_title(),
+                        _ => {}
+                    }
+                    if event.stage < 4 {
+                        client.play_sound(
+                            Sound::BlockNoteBlockPling,
+                            SoundCategory::Master,
+                            pos.0,
+                            1.0,
+                            1.0,
+                        );
+                    } else if event.stage == 4 {
+                        client.play_sound(
+                            Sound::BlockNoteBlockPling,
+                            SoundCategory::Master,
+                            pos.0,
+                            1.0,
+                            5.0,
+                        );
+                    }
+                }
+            }
         }
     }
 }

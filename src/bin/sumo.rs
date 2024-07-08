@@ -8,48 +8,22 @@ use lib::config::*;
 use lib::game::*;
 use valence::entity::{EntityId, EntityStatuses};
 use valence::math::Vec3Swizzles;
+use valence::prelude::*;
 use valence::protocol::packets::play::DamageTiltS2c;
 use valence::protocol::sound::SoundCategory;
 use valence::protocol::Sound;
 use valence::protocol::VarInt;
 use valence::protocol::WritePacket;
-use valence::{prelude::*, CompressionThreshold, ServerSettings};
 
 pub fn main() {
-    let config = match load_config() {
-        Ok(config) => config,
-        Err(e) => {
-            eprintln!("{}", e);
-            return;
+    match register_defaults(&mut App::new()) {
+        Ok(app) => {
+            app.add_systems(EventLoopUpdate, handle_combat_events)
+                .add_systems(Update, (handle_oob_clients,))
+                .run();
         }
-    };
-
-    App::new()
-        .insert_resource(config.0)
-        .insert_resource(ServerSettings {
-            compression_threshold: CompressionThreshold(-1),
-            ..Default::default()
-        })
-        .add_plugins(DefaultPlugins)
-        .insert_resource(config.1)
-        .add_event::<StartGameEvent>()
-        .add_event::<EndGameEvent>()
-        .add_systems(Startup, setup)
-        .add_systems(EventLoopUpdate, handle_combat_events)
-        .add_systems(
-            Update,
-            (
-                init_clients,
-                despawn_disconnected_clients,
-                handle_oob_clients,
-                start_game.after(init_clients),
-                end_game.after(handle_oob_clients),
-                gameloop.after(start_game),
-                chat_message,
-            ),
-        )
-        .add_systems(PostUpdate, (handle_disconnect, check_queue))
-        .run();
+        Err(e) => eprintln!("{}", e),
+    }
 }
 
 #[derive(WorldQuery)]
@@ -154,7 +128,7 @@ fn handle_oob_clients(
             if gamestate.game_id.is_some() {
                 end_game.send(EndGameEvent {
                     game_id: gamestate.game_id.unwrap(),
-                    loser: gamestate.team
+                    loser: gamestate.team,
                 });
             }
         }

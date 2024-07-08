@@ -14,67 +14,49 @@ use valence::entity::{EntityId, EntityStatuses};
 use valence::event_loop::PacketEvent;
 use valence::inventory::PlayerAction;
 use valence::math::Vec3Swizzles;
+use valence::prelude::*;
 use valence::protocol::packets::play::DamageTiltS2c;
 use valence::protocol::packets::play::PlayerActionC2s;
 use valence::protocol::sound::SoundCategory;
 use valence::protocol::Sound;
 use valence::protocol::VarInt;
 use valence::protocol::WritePacket;
-use valence::{prelude::*, CompressionThreshold, ServerSettings};
 
 #[derive(Component)]
 struct ProjectileOwner(EntityId);
 
 pub fn main() {
-    let config = match load_config() {
-        Ok(config) => config,
-        Err(e) => {
-            eprintln!("{}", e);
-            return;
+    match register_defaults(&mut App::new()) {
+        Ok(app) => {
+            app.add_systems(
+                EventLoopUpdate,
+                (handle_combat_events, handle_player_action),
+            )
+            .add_systems(
+                Update,
+                (
+                    gamestage_change.after(gameloop),
+                    end_game.after(lib::game::end_game),
+                    handle_arrow_physics,
+                    handle_oob_clients,
+                ),
+            )
+            .run();
         }
-    };
-
-    App::new()
-        .insert_resource(config.0)
-        .insert_resource(ServerSettings {
-            compression_threshold: CompressionThreshold(-1),
-            ..Default::default()
-        })
-        .add_plugins(DefaultPlugins)
-        .insert_resource(config.1)
-        .add_event::<StartGameEvent>()
-        .add_event::<EndGameEvent>()
-        .add_systems(Startup, setup)
-        .add_systems(
-            EventLoopUpdate,
-            (handle_combat_events, handle_player_action),
-        )
-        .add_systems(
-            Update,
-            (
-                init_clients,
-                despawn_disconnected_clients,
-                handle_oob_clients,
-                lib::game::start_game.after(init_clients),
-                start_game.after(lib::game::start_game),
-                lib::game::end_game.after(handle_oob_clients),
-                end_game.after(lib::game::end_game),
-                gameloop.after(start_game),
-                chat_message,
-                handle_arrow_physics,
-            ),
-        )
-        .add_systems(PostUpdate, (handle_disconnect, check_queue))
-        .run();
+        Err(e) => eprintln!("{}", e),
+    }
 }
 
-fn start_game(
+fn gamestage_change(
     mut clients: Query<&mut Inventory, With<Client>>,
     games: Query<&Entities>,
-    mut start_game: EventReader<StartGameEvent>,
+    mut event: EventReader<GameStageEvent>,
 ) {
-    for event in start_game.read() {
-        if let Ok(entities) = games.get(event.0) {
+    for event in event.read() {
+        if event.stage != 4 {
+            continue;
+        }
+        if let Ok(entities) = games.get(event.game_id) {
             for entity in entities.0.iter() {
                 if let Ok(mut inventory) = clients.get_mut(*entity) {
                     inventory.set_slot(36, ItemStack::new(ItemKind::Bow, 1, None));

@@ -8,12 +8,12 @@ use lib::config::*;
 use lib::game::*;
 use valence::entity::{EntityId, EntityStatuses};
 use valence::math::Vec3Swizzles;
+use valence::prelude::*;
 use valence::protocol::packets::play::DamageTiltS2c;
 use valence::protocol::sound::SoundCategory;
 use valence::protocol::Sound;
 use valence::protocol::VarInt;
 use valence::protocol::WritePacket;
-use valence::{prelude::*, CompressionThreshold, ServerSettings};
 
 #[derive(Component, Default)]
 struct BoxingState {
@@ -21,48 +21,24 @@ struct BoxingState {
 }
 
 pub fn main() {
-    let config = match load_config() {
-        Ok(config) => config,
-        Err(e) => {
-            eprintln!("{}", e);
-            return;
+    match register_defaults(&mut App::new()) {
+        Ok(app) => {
+            app.add_systems(EventLoopUpdate, handle_combat_events)
+                .add_systems(
+                    Update,
+                    (
+                        init_clients.after(lib::game::init_clients),
+                        handle_oob_clients,
+                        end_game.after(lib::game::end_game),
+                    ),
+                )
+                .run();
         }
-    };
-
-    App::new()
-        .insert_resource(config.0)
-        .insert_resource(ServerSettings {
-            compression_threshold: CompressionThreshold(-1),
-            ..Default::default()
-        })
-        .add_plugins(DefaultPlugins)
-        .insert_resource(config.1)
-        .add_event::<StartGameEvent>()
-        .add_event::<EndGameEvent>()
-        .add_systems(Startup, setup)
-        .add_systems(EventLoopUpdate, handle_combat_events)
-        .add_systems(
-            Update,
-            (
-                lib::game::init_clients,
-                init_clients.after(lib::game::init_clients),
-                despawn_disconnected_clients,
-                handle_oob_clients,
-                start_game.after(lib::game::init_clients),
-                end_game.after(handle_oob_clients),
-                lib::game::end_game.after(end_game),
-                gameloop.after(start_game),
-                chat_message,
-            ),
-        )
-        .add_systems(PostUpdate, (handle_disconnect, check_queue))
-        .run();
+        Err(e) => eprintln!("{}", e),
+    }
 }
 
-fn init_clients(
-    clients: Query<Entity, Added<Client>>,
-    mut commands: Commands,
-) {
+fn init_clients(clients: Query<Entity, Added<Client>>, mut commands: Commands) {
     for client in clients.iter() {
         commands.entity(client).insert(BoxingState::default());
     }
@@ -162,8 +138,12 @@ fn handle_combat_events(
         victim.boxing_state.hits += 1;
 
         if victim.boxing_state.hits >= 5 {
-            victim.client.send_chat_message("You have been knocked out!");
-            attacker.client.send_chat_message("You have knocked out your opponent!");
+            victim
+                .client
+                .send_chat_message("You have been knocked out!");
+            attacker
+                .client
+                .send_chat_message("You have knocked out your opponent!");
             end_game.send(EndGameEvent {
                 game_id: victim.gamestate.game_id.unwrap(),
                 loser: victim.gamestate.team,
@@ -183,7 +163,7 @@ fn handle_oob_clients(
             if gamestate.game_id.is_some() {
                 end_game.send(EndGameEvent {
                     game_id: gamestate.game_id.unwrap(),
-                    loser: gamestate.team
+                    loser: gamestate.team,
                 });
             }
         }
