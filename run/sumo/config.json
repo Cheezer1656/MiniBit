@@ -7,12 +7,19 @@
         "connection_mode": 3,
         "secret": ""
     },
-    "world": {
-        "spawn": [0.5, 10.0, 0.5]
-    },
     "worlds": [
         {
-            "path": "../worlds/sumo1"
+            "path": "../worlds/waitingarea",
+            "spawns": [
+                [0.5, 10.0, 0.5]
+            ]
+        },
+        {
+            "path": "../worlds/sumo1",
+            "spawns": [
+                [0.5, 10.0, 8],
+                [0.5, 10.0, -8]
+            ]
         }
     ]
 }

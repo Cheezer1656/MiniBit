@@ -11,6 +11,9 @@ use valence::{
 use valence_anvil::AnvilLevel;
 
 #[derive(Component)]
+pub struct MapIndex(pub usize);
+
+#[derive(Component)]
 pub struct Entities(pub Vec<Entity>);
 
 #[derive(Component)]
@@ -21,6 +24,7 @@ pub struct GameStage(pub u8);
 
 #[derive(Bundle)]
 pub struct Game {
+    pub map: MapIndex,
     pub layer: EntityLayerId,
     pub clients: Entities,
     pub game_start: GameTime,
@@ -161,7 +165,7 @@ pub fn init_clients(
         layer_id.0 = layer;
         visible_chunk_layer.0 = layer;
         visible_entity_layers.0.insert(layer);
-        pos.set(config.spawn_pos);
+        pos.set(config.spawns[0][0]);
         *game_mode = GameMode::Adventure;
         health.0 = 20.0;
         commands
@@ -187,6 +191,7 @@ pub fn check_queue(
 
         let game_id = commands
             .spawn(Game {
+                map: MapIndex(0),
                 layer: EntityLayerId(entitylayer),
                 clients: Entities(globals.queue.drain(..2).collect()),
                 game_start: GameTime(SystemTime::now()),
@@ -231,7 +236,7 @@ pub fn start_game(
         &mut VisibleEntityLayers,
         &mut Position,
     )>,
-    games: Query<(&EntityLayerId, &Entities), Without<Client>>,
+    mut games: Query<(&mut MapIndex, &EntityLayerId, &Entities), Without<Client>>,
     chunklayers: Query<Entity, With<ChunkLayer>>,
     entitylayers: Query<Entity, With<EntityLayer>>,
     mut start_game: EventReader<StartGameEvent>,
@@ -239,48 +244,43 @@ pub fn start_game(
     config: Res<ServerConfig>,
 ) {
     for event in start_game.read() {
-        let Ok((game_layer, entities)) = games.get(event.0) else {
-            continue;
-        };
-        for (i, entity) in entities.0.iter().enumerate() {
-            let Ok((
-                mut client,
-                mut gamestate,
-                mut layer_id,
-                mut visible_chunk_layer,
-                mut visible_entity_layers,
-                mut pos,
-            )) = clients.get_mut(*entity)
-            else {
-                continue;
-            };
-            let Ok(chunklayer) =
-                chunklayers.get(globals.map_layers[fastrand::usize(..globals.map_layers.len())])
-            else {
-                continue;
-            };
-            let Ok(entitylayer) = entitylayers.get(game_layer.0) else {
-                continue;
-            };
+        if let Ok((mut map, game_layer, entities)) = games.get_mut(event.0) {
+            let map_idx = fastrand::usize(1..globals.map_layers.len());
+            map.0 = map_idx;
 
-            layer_id.0 = entitylayer;
-            visible_chunk_layer.0 = chunklayer;
-            visible_entity_layers.0.clear();
-            visible_entity_layers.0.insert(entitylayer);
+            for (i, entity) in entities.0.iter().enumerate() {
+                let Ok((
+                    mut client,
+                    mut gamestate,
+                    mut layer_id,
+                    mut visible_chunk_layer,
+                    mut visible_entity_layers,
+                    mut pos,
+                )) = clients.get_mut(*entity)
+                else {
+                    continue;
+                };
+                let Ok(chunklayer) =
+                    chunklayers.get(globals.map_layers[map_idx])
+                else {
+                    continue;
+                };
+                let Ok(entitylayer) = entitylayers.get(game_layer.0) else {
+                    continue;
+                };
 
-            gamestate.game_id = Some(event.0);
+                layer_id.0 = entitylayer;
+                visible_chunk_layer.0 = chunklayer;
+                visible_entity_layers.0.clear();
+                visible_entity_layers.0.insert(entitylayer);
 
-            let mut newpos = config.spawn_pos;
-            if i == 0 {
-                gamestate.team = 0;
-                newpos.z = 8.0;
-            } else {
-                gamestate.team = 1;
-                newpos.z = -8.0;
+                gamestate.game_id = Some(event.0);
+                gamestate.team = i as u8;
+
+                pos.set(config.spawns[map_idx][gamestate.team as usize]);
+
+                client.send_chat_message("Game started!");
             }
-            pos.set(newpos);
-
-            client.send_chat_message("Game started!");
         }
     }
 }
@@ -322,7 +322,7 @@ pub fn end_game(
             visible_chunk_layer.0 = globals.map_layers[0];
             visible_entity_layers.0.clear();
             visible_entity_layers.0.insert(globals.map_layers[0]);
-            pos.set(config.spawn_pos);
+            pos.set(config.spawns[0][0]);
             health.0 = 20.0;
 
             if gamestate.team == event.loser {
@@ -333,6 +333,7 @@ pub fn end_game(
             }
 
             gamestate.game_id = None;
+            gamestate.team = 0;
 
             globals.queue.push(*entity);
         }
@@ -354,27 +355,24 @@ pub struct GameQuery {
 
 pub fn gameloop(
     mut clients: Query<GameQuery>,
-    mut games: Query<(Entity, &mut GameStage, &GameTime)>,
+    mut games: Query<(Entity, &MapIndex, &mut GameStage, &GameTime)>,
     mut gamestage: EventWriter<GameStageEvent>,
     config: Res<ServerConfig>,
 ) {
-    for (game_id, mut stage, time) in games.iter_mut() {
+    for (game_id, map, mut stage, time) in games.iter_mut() {
         if stage.0 < 4 {
             for mut player in clients.iter_mut() {
                 if player.gamestate.game_id == Some(game_id) {
-                    let mut newpos = config.spawn_pos;
                     if player.gamestate.team == 0 {
-                        newpos.z = 8.0;
                         player.yaw.0 = 180.0;
                         player.look.yaw = 180.0;
                         player.look.pitch = 0.0;
                     } else {
-                        newpos.z = -8.0;
                         player.yaw.0 = 0.0;
                         player.look.yaw = 0.0;
                         player.look.pitch = 0.0;
                     }
-                    player.pos.set(newpos);
+                    player.pos.set(config.spawns[map.0][player.gamestate.team as usize]);
                 }
             }
         }

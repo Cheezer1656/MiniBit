@@ -316,13 +316,11 @@ fn handle_arrow_physics(
 }
 
 fn handle_oob_clients(
-    mut positions: Query<(&mut Position, &PlayerGameState), With<Client>>,
+    positions: Query<(&mut Position, &PlayerGameState), With<Client>>,
     mut end_game: EventWriter<EndGameEvent>,
-    config: Res<ServerConfig>,
 ) {
-    for (mut pos, gamestate) in positions.iter_mut() {
+    for (pos, gamestate) in positions.iter() {
         if pos.0.y < 0.0 {
-            pos.set(config.spawn_pos);
             if gamestate.game_id.is_some() {
                 end_game.send(EndGameEvent {
                     game_id: gamestate.game_id.unwrap(),

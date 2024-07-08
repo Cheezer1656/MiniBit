@@ -9,7 +9,7 @@ use valence::{math::DVec3, network::NetworkSettings, prelude::Resource, prelude:
 #[derive(Resource)]
 pub struct ServerConfig {
     pub world_paths: Vec<PathBuf>,
-    pub spawn_pos: DVec3,
+    pub spawns: Vec<Vec<DVec3>>,
 }
 
 pub fn load_config() -> Result<(NetworkSettings, ServerConfig), &'static str> {
@@ -29,6 +29,16 @@ pub fn load_config() -> Result<(NetworkSettings, ServerConfig), &'static str> {
         .map(|v| PathBuf::from(v["path"].as_str().unwrap_or("")))
         .collect::<Vec<PathBuf>>();
 
+    let spawns = config["worlds"]
+        .members()
+        .map(|v| {
+            v["spawns"]
+                .members()
+                .map(|v| DVec3::new(v[0].as_f64().unwrap_or(0.0), v[1].as_f64().unwrap_or(0.0), v[2].as_f64().unwrap_or(0.0)))
+                .collect::<Vec<DVec3>>()
+        })
+        .collect::<Vec<Vec<DVec3>>>();
+
     for world_path in world_paths.iter() {
         if !world_path.exists() {
             return Err("One of the world paths does not exist. Exiting.");
@@ -36,11 +46,6 @@ pub fn load_config() -> Result<(NetworkSettings, ServerConfig), &'static str> {
             return Err("One of the world paths is not a directory. Exiting.");
         }
     }
-
-    let spawn_pos = config["world"]["spawn"]
-        .members()
-        .map(|v| v.as_f64().unwrap_or(0.0))
-        .collect::<Vec<f64>>();
 
     Ok((
         NetworkSettings {
@@ -70,7 +75,7 @@ pub fn load_config() -> Result<(NetworkSettings, ServerConfig), &'static str> {
         },
         ServerConfig {
             world_paths,
-            spawn_pos: DVec3::new(spawn_pos[0], spawn_pos[1], spawn_pos[2]),
+            spawns,
         },
     ))
 }
