@@ -14,10 +14,16 @@ use valence::entity::{EntityId, EntityStatuses};
 use valence::event_loop::PacketEvent;
 use valence::inventory::PlayerAction;
 use valence::math::Vec3Swizzles;
+use valence::protocol::packets::play::DamageTiltS2c;
 use valence::protocol::packets::play::PlayerActionC2s;
 use valence::protocol::sound::SoundCategory;
 use valence::protocol::Sound;
+use valence::protocol::VarInt;
+use valence::protocol::WritePacket;
 use valence::{prelude::*, CompressionThreshold, ServerSettings};
+
+#[derive(Component)]
+struct ProjectileOwner(EntityId);
 
 pub fn main() {
     let config = match load_config() {
@@ -125,6 +131,7 @@ fn handle_combat_events(
     for &InteractEntityEvent {
         client: attacker_client,
         entity: victim_client,
+        interact: interaction,
         ..
     } in interact_entity.read()
     {
@@ -133,8 +140,9 @@ fn handle_combat_events(
             continue;
         };
 
-        if attacker.gamestate.game_id != victim.gamestate.game_id
+        if interaction != EntityInteraction::Attack
             || server.current_tick() - victim.state.last_attacked_tick < 10
+            || attacker.gamestate.game_id != victim.gamestate.game_id
         {
             continue;
         }
@@ -170,6 +178,10 @@ fn handle_combat_events(
             1.0,
             1.0,
         );
+        victim.client.write_packet(&DamageTiltS2c {
+            entity_id: VarInt(0),
+            yaw: 0.0,
+        });
         attacker.client.play_sound(
             Sound::EntityPlayerHurt,
             SoundCategory::Player,
@@ -177,6 +189,10 @@ fn handle_combat_events(
             1.0,
             1.0,
         );
+        attacker.client.write_packet(&DamageTiltS2c {
+            entity_id: VarInt(victim.id.get()),
+            yaw: 0.0,
+        });
 
         if victim.health.0 <= 1.0 {
             end_game.send(EndGameEvent {
@@ -192,7 +208,7 @@ fn handle_combat_events(
 #[derive(WorldQuery)]
 #[world_query(mutable)]
 struct ActionQuery {
-    client: &'static mut Client,
+    id: &'static EntityId,
     inv: &'static mut Inventory,
     pos: &'static Position,
     look: &'static Look,
@@ -201,30 +217,33 @@ struct ActionQuery {
     state: &'static mut CombatState,
 }
 fn handle_player_action(
-    mut clients: Query<ActionQuery>,
+    mut players: Query<ActionQuery>,
+    mut clients: Query<&mut Client>,
     mut packets: EventReader<PacketEvent>,
     mut commands: Commands,
 ) {
     for packet in packets.read() {
         if let Some(pkt) = packet.decode::<PlayerActionC2s>() {
-            let Ok(mut client) = clients.get_mut(packet.client) else {
+            let Ok(mut player) = players.get_mut(packet.client) else {
                 continue;
             };
             if pkt.action == PlayerAction::ReleaseUseItem
-                && client.inv.slot(36).item == ItemKind::Bow
-                && client.inv.slot(44).item == ItemKind::Arrow
+                && player.inv.slot(36).item == ItemKind::Bow
+                && player.inv.slot(44).item == ItemKind::Arrow
             {
-                let count = client.inv.slot(44).count;
-                client.inv.set_slot_amount(44, count - 1);
-                client.client.play_sound(
-                    Sound::EntityArrowShoot,
-                    SoundCategory::Player,
-                    client.pos.0,
-                    1.0,
-                    1.0,
-                );
-                let rad_yaw = client.yaw.0.to_radians();
-                let rad_pitch = client.look.pitch.to_radians();
+                let count = player.inv.slot(44).count;
+                player.inv.set_slot_amount(44, count - 1);
+                for mut client in clients.iter_mut() {
+                    client.play_sound(
+                        Sound::EntityArrowShoot,
+                        SoundCategory::Player,
+                        player.pos.0,
+                        1.0,
+                        1.0,
+                    );
+                }
+                let rad_yaw = player.yaw.0.to_radians();
+                let rad_pitch = player.look.pitch.to_radians();
                 let hspeed = rad_pitch.cos();
                 let vel = Vec3::new(
                     -rad_yaw.sin() * hspeed,
@@ -232,33 +251,38 @@ fn handle_player_action(
                     rad_yaw.cos() * hspeed,
                 ) * 30.0;
                 let dir = vel.normalize().as_dvec3() * 0.5;
-                println!("Vel: {:?}, Dir: {:?}", vel, dir);
-                commands.spawn(ArrowEntityBundle {
-                    position: Position(DVec3::new(
-                        client.pos.0.x + dir.x,
-                        client.pos.0.y + 1.62,
-                        client.pos.0.z + dir.z,
-                    )),
-                    look: *client.look,
-                    head_yaw: *client.yaw,
-                    velocity: Velocity(vel),
-                    layer: *client.layer,
-                    ..Default::default()
-                });
+                let arrow_id = commands
+                    .spawn(ArrowEntityBundle {
+                        position: Position(DVec3::new(
+                            player.pos.0.x + dir.x,
+                            player.pos.0.y + 1.62,
+                            player.pos.0.z + dir.z,
+                        )),
+                        look: *player.look,
+                        head_yaw: *player.yaw,
+                        velocity: Velocity(vel),
+                        layer: *player.layer,
+                        ..Default::default()
+                    })
+                    .id();
+                commands
+                    .entity(arrow_id)
+                    .insert(ProjectileOwner(*player.id));
             }
         }
     }
 }
 
 fn handle_arrow_physics(
-    mut arrows: Query<(&mut Position, &mut Velocity), With<ArrowEntity>>,
-    mut clients: Query<
-        (&PlayerGameState, &Position, &mut Health),
+    mut arrows: Query<(&mut Position, &mut Velocity, &ProjectileOwner), With<ArrowEntity>>,
+    mut clients: Query<(&mut Client, &EntityId, &PlayerGameState)>,
+    mut players: Query<
+        (&EntityId, &PlayerGameState, &Position, &mut Health),
         (With<Client>, Without<ArrowEntity>),
     >,
     mut endgame: EventWriter<EndGameEvent>,
 ) {
-    for (mut pos, mut velocity) in arrows.iter_mut() {
+    for (mut pos, mut velocity, owner) in arrows.iter_mut() {
         pos.0 += DVec3::from(velocity.0) / 20.0;
 
         //add gravity
@@ -266,21 +290,44 @@ fn handle_arrow_physics(
 
         //air friction
         velocity.0 *= 1.0 - (0.99 / 20.0);
-        for (gamestate, player_pos, mut health) in clients.iter_mut() {
+        for (id, gamestate, player_pos, mut health) in players.iter_mut() {
             if (pos.0.x - player_pos.0.x).abs() < 0.3
                 && (pos.0.z - player_pos.0.z).abs() < 0.3
                 && (pos.0.y - player_pos.0.y) < 1.8
                 && (pos.0.y - player_pos.0.y) > 0.0
             {
-                if health.0 <= 1.0 {
+                for (mut client, id2, gamestate2) in clients.iter_mut() {
+                    if gamestate2.game_id == gamestate.game_id {
+                        client.play_sound(
+                            Sound::EntityPlayerHurt,
+                            SoundCategory::Player,
+                            pos.0,
+                            1.0,
+                            1.0,
+                        );
+                        client.write_packet(&DamageTiltS2c {
+                            entity_id: VarInt(if id == id2 { 0 } else { id.get() }),
+                            yaw: 0.0,
+                        });
+                    }
+                    if owner.0 == *id2 {
+                        client.play_sound(
+                            Sound::EntityArrowHitPlayer,
+                            SoundCategory::Player,
+                            player_pos.0,
+                            1.0,
+                            1.0,
+                        );
+                    }
+                }
+                if health.0 <= 6.0 {
                     endgame.send(EndGameEvent {
                         game_id: gamestate.game_id.unwrap(),
                         loser: gamestate.team,
                     });
                 } else {
-                    health.0 -= 1.0;
+                    health.0 -= 6.0;
                 }
-                
             }
         }
     }

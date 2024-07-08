@@ -8,8 +8,11 @@ use lib::config::*;
 use lib::game::*;
 use valence::entity::{EntityId, EntityStatuses};
 use valence::math::Vec3Swizzles;
+use valence::protocol::packets::play::DamageTiltS2c;
 use valence::protocol::sound::SoundCategory;
 use valence::protocol::Sound;
+use valence::protocol::VarInt;
+use valence::protocol::WritePacket;
 use valence::{prelude::*, CompressionThreshold, ServerSettings};
 
 #[derive(Component, Default)]
@@ -93,6 +96,7 @@ fn handle_combat_events(
     for &InteractEntityEvent {
         client: attacker_client,
         entity: victim_client,
+        interact: interaction,
         ..
     } in interact_entity.read()
     {
@@ -101,8 +105,9 @@ fn handle_combat_events(
             continue;
         };
 
-        if attacker.gamestate.game_id != victim.gamestate.game_id
+        if interaction != EntityInteraction::Attack
             || server.current_tick() - victim.state.last_attacked_tick < 10
+            || attacker.gamestate.game_id != victim.gamestate.game_id
         {
             continue;
         }
@@ -138,6 +143,10 @@ fn handle_combat_events(
             1.0,
             1.0,
         );
+        victim.client.write_packet(&DamageTiltS2c {
+            entity_id: VarInt(0),
+            yaw: 0.0,
+        });
         attacker.client.play_sound(
             Sound::EntityPlayerHurt,
             SoundCategory::Player,
@@ -145,6 +154,10 @@ fn handle_combat_events(
             1.0,
             1.0,
         );
+        attacker.client.write_packet(&DamageTiltS2c {
+            entity_id: VarInt(victim.id.get()),
+            yaw: 0.0,
+        });
 
         victim.boxing_state.hits += 1;
 
