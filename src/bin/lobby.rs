@@ -10,7 +10,7 @@ use std::{
 use valence::{
     entity::{living::Health, player::PlayerEntityBundle},
     event_loop::PacketEvent,
-    inventory::HeldItem,
+    inventory::{ClickSlotEvent, HeldItem},
     message::{ChatMessageEvent, SendMessage},
     nbt::compound,
     player_list::{DisplayName, Listed, PlayerListEntryBundle},
@@ -210,7 +210,7 @@ pub fn main() {
         })
         .add_event::<ActionEvent>()
         .add_systems(Startup, setup)
-        .add_systems(EventLoopUpdate, item_interactions)
+        .add_systems(EventLoopUpdate, (item_interactions, handle_slot_click))
         .add_systems(
             Update,
             (
@@ -273,15 +273,23 @@ fn setup(
         });
     }
 
-    globals.navigator_gui = Some(
-        commands
-            .spawn(Inventory::with_title(
-                InventoryKind::Generic9x6,
-                "Server Navigator",
-                false,
-            ))
-            .id(),
-    );
+    let mut navigator_inv =
+        Inventory::with_title(InventoryKind::Generic9x6, "Server Navigator", false);
+    for (i, npc) in config.npcs.iter().enumerate() {
+        navigator_inv.set_slot(
+            i.try_into().unwrap(),
+            ItemStack::new(
+                ItemKind::PlayerHead,
+                1,
+                Some(compound! {
+                    "display" => compound! {
+                        "Name" => format!("{{\"text\":\"{}\",\"italic\":false}}", npc.name.0)
+                    },
+                }),
+            ),
+        );
+    }
+    globals.navigator_gui = Some(commands.spawn(navigator_inv).id());
 }
 
 fn init_clients(
@@ -413,6 +421,25 @@ fn item_interactions(
                     }
                     _ => {}
                 }
+            }
+        }
+    }
+}
+
+fn handle_slot_click(
+    clients: Query<&OpenInventory, With<Client>>,
+    mut action_event: EventWriter<ActionEvent>,
+    mut click_slot: EventReader<ClickSlotEvent>,
+    config: Res<ServerConfig>,
+) {
+    for event in click_slot.read() {
+        if let Ok(_open_inv) = clients.get(event.client) {
+            if event.window_id != 0 && (event.slot_id as usize) < config.npcs.len() {
+                action_event.send(ActionEvent {
+                    entity: event.client,
+                    action: config.npcs[event.slot_id as usize].command.command.clone(),
+                    args: config.npcs[event.slot_id as usize].command.args.clone(),
+                })
             }
         }
     }
