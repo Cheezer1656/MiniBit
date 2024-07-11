@@ -29,6 +29,10 @@ path = "src/bin/boxing.rs"
 name = "bowfight"
 path = "src/bin/bowfight.rs"
 
+[[bin]]
+name = "trainchase"
+path = "src/bin/trainchase.rs"
+
 [profile.dev]
 opt-level = 1
 
