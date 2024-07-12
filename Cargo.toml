@@ -30,6 +30,10 @@ name = "bowfight"
 path = "src/bin/bowfight.rs"
 
 [[bin]]
+name = "classic"
+path = "src/bin/classic.rs"
+
+[[bin]]
 name = "trainchase"
 path = "src/bin/trainchase.rs"
 
