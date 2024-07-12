@@ -9,6 +9,7 @@ use valence::{entity::{player::PlayerEntityBundle, Velocity}, player_list::{Disp
 
 const START_POS: DVec3 = DVec3::new(0.0, 100.0, 0.0);
 const VIEW_DIST: u8 = 10;
+const GEN_DIST: i32 = 10;
 const PUPPET_SPEED: f32 = 0.2;
 
 #[derive(Component)]
@@ -108,7 +109,7 @@ fn init_clients(
         visible_chunk_layer.0 = entity;
         visible_entity_layers.0.insert(entity);
         is_flat.0 = true;
-        *game_mode = GameMode::Adventure;
+        *game_mode = GameMode::Spectator;
 
         client.send_chat_message("Welcome to train chase!".italic());
 
@@ -170,7 +171,7 @@ fn reset_clients(
     for (mut puppet_pos, mut puppet_vel, owner) in puppets.iter_mut() {
         if let Ok((mut client, mut pos, mut state, mut layer)) = clients.get_mut(owner.0) {
             let block = layer.block(BlockPos::from(puppet_pos.0.floor()));
-            let touched_block = block.is_some() && block.unwrap().state != BlockState::AIR;
+            let touched_block = block.is_some() && block.unwrap().state == BlockState::OAK_SIGN;
             let out_of_bounds = puppet_pos.0.y < START_POS.y - 32_f64;
 
             if out_of_bounds || touched_block || state.is_added() {
@@ -191,11 +192,10 @@ fn reset_clients(
                     layer.insert_chunk(pos, UnloadedChunk::new());
                 }
 
-                
-                // layer.set_block(BlockPos::from(pos.0.floor()), BlockState::STONE);
                 for i in -1..=1 {
-                    for j in 0..5 {
+                    for j in 0..GEN_DIST {
                         layer.set_block(BlockPos::new(START_POS.x as i32 + i, START_POS.y as i32, START_POS.z as i32 + j), BlockState::DIRT);
+                        layer.set_block(BlockPos::new(START_POS.x as i32 + i, START_POS.y as i32 + 1, START_POS.z as i32 + j), BlockState::RAIL);
                     }
                 }
 
@@ -208,7 +208,7 @@ fn reset_clients(
                     f64::from(START_POS.z) + 0.5,
                 ]);
 
-                pos.0.z = puppet_pos.0.z - 4.0;
+                pos.0 = puppet_pos.get() + DVec3::new(0.0, 4.0, -4.0);
             }
         }
     }
@@ -232,19 +232,20 @@ fn manage_chunks(mut clients: Query<(&Position, &OldPosition, &mut ChunkLayer), 
 }
 
 fn manage_blocks(
-    mut clients: Query<(&Position, &mut ChunkLayer), With<Client>>,
+    mut clients: Query<&mut ChunkLayer, With<Client>>,
     puppets: Query<(&Position, &Owner), (With<Puppet>, Without<Client>)>,
 ) {
     for (puppet_pos, owner) in puppets.iter() {
-        if let Ok((pos, mut layer)) = clients.get_mut(owner.0) {
-            match layer.block(BlockPos::new(puppet_pos.0.x.floor() as i32, START_POS.y as i32, puppet_pos.0.z.floor() as i32 + 5)) {
+        if let Ok(mut layer) = clients.get_mut(owner.0) {
+            match layer.block(BlockPos::new(puppet_pos.0.x.floor() as i32, START_POS.y as i32, puppet_pos.0.z.floor() as i32 + GEN_DIST)) {
                 Some(block) => {
                     if block.state == BlockState::AIR {
-                        layer.set_block(BlockPos::from(pos.0.floor() - DVec3::new(0.0, 1.0, 0.0)), BlockState::GLASS);
                         for i in -1..=1 {
-                            layer.set_block(BlockPos::new(START_POS.x as i32 + i, START_POS.y as i32, puppet_pos.0.z.floor() as i32 + 5), BlockState::DIRT);
+                            layer.set_block(BlockPos::new(START_POS.x as i32 + i, START_POS.y as i32, puppet_pos.0.z.floor() as i32 + GEN_DIST), BlockState::DIRT);
                             if fastrand::u8(0..20) == 0 {
-                                layer.set_block(BlockPos::new(START_POS.x as i32 + i, START_POS.y as i32 + 1, puppet_pos.0.z.floor() as i32 + 5), BlockState::OAK_SIGN);
+                                layer.set_block(BlockPos::new(START_POS.x as i32 + i, START_POS.y as i32 + 1, puppet_pos.0.z.floor() as i32 + GEN_DIST), BlockState::OAK_SIGN);
+                            } else {
+                                layer.set_block(BlockPos::new(START_POS.x as i32 + i, START_POS.y as i32 + 1, puppet_pos.0.z.floor() as i32 + GEN_DIST), BlockState::RAIL);
                             }
                         }
                     }
@@ -265,7 +266,7 @@ fn lock_look(
 }
 
 fn handle_movement(
-    mut clients: Query<(&mut Client, &mut Position, &OldPosition, &mut GameState), With<Client>>,
+    mut clients: Query<(&mut Client, &Position, &OldPosition, &mut GameState), With<Client>>,
     mut puppets: Query<(&Position, &mut Velocity), (With<Puppet>, Without<Client>)>,
     mut sneaking: EventReader<SneakEvent>,
 ) {
@@ -274,24 +275,29 @@ fn handle_movement(
             state.sneaking = event.state == SneakState::Start;
         }
     }
-    for (mut client, mut pos, old_pos, state) in clients.iter_mut() {
+    for (mut client, pos, old_pos, state) in clients.iter_mut() {
         if let Ok((puppet_pos, mut puppet_vel)) = puppets.get_mut(state.puppet) {
-            if (pos.0*100.0).round()/100.0 != (old_pos.get()*100.0).round()/100.0 {
+            if pos.0 != puppet_pos.get() + DVec3::new(0.0, 4.0, -4.0) && (pos.0*100.0).round()/100.0 != (old_pos.get()*100.0).round()/100.0 {
                 let vel = Vec3::new((pos.0.x - old_pos.get().x) as f32, (pos.0.y - old_pos.get().y) as f32, (pos.0.z - old_pos.get().z) as f32) * 2.0;
                 if vel.x != 0.0 {
                     puppet_vel.0.x = vel.x;
                 }
             }
-            if state.sneaking && puppet_vel.0.y == 0.0 {
-                puppet_vel.0.y += 0.5;
-            }
-            pos.0.x = START_POS.x + 0.5;
-            pos.0.y = START_POS.y + 4.0;
-            if puppet_pos.0.z - pos.0.z > 4.1 {
-                client.set_velocity(Vec3::new(0.0, 0.0, PUPPET_SPEED*50.0));
+
+            let mut vel = Vec3::ZERO;
+
+            vel.y = if pos.0.y - START_POS.y < 4.1 || pos.0.y - START_POS.y > 4.1 {
+                (START_POS.y + 4.0 - pos.0.y) as f32
             } else {
-                client.set_velocity(Vec3::new(0.0, 0.0, PUPPET_SPEED*20.0));
-            }
+                0.0
+            };
+            vel.z = if puppet_pos.0.z - pos.0.z < 4.1 || puppet_pos.0.z - pos.0.z > 4.1 {
+                (puppet_pos.0.z - 4.0 - pos.0.z) as f32 * PUPPET_SPEED * 100.0
+            } else {
+                PUPPET_SPEED * 20.0
+            };
+
+            client.set_velocity(vel);
         };
     }
 }
@@ -302,7 +308,7 @@ fn apply_puppet_physics(
 ) {
     for (mut puppet_pos, mut vel, owner) in puppets.iter_mut() {
         if let Ok(layer) = clients.get_mut(owner.0) {
-            vel.0.y -= 0.05;
+            vel.0.y -= 0.1;
             let block = layer.block(BlockPos::from(puppet_pos.0 + DVec3::from(vel.0)));
             if block.is_some() && block.unwrap().state != BlockState::AIR {
                 vel.0.y = 0.0;
