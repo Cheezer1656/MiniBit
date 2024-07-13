@@ -5,7 +5,7 @@ use std::{
     sync::Arc,
 };
 
-use valence::{entity::{player::PlayerEntityBundle, Velocity}, player_list::{DisplayName, Listed, PlayerListEntryBundle}, prelude::*, spawn::IsFlat, CompressionThreshold, ServerSettings};
+use valence::{entity::{player::PlayerEntityBundle, Velocity}, event_loop::PacketEvent, player_list::{DisplayName, Listed, PlayerListEntryBundle}, prelude::*, protocol::packets::play::HandSwingC2s, spawn::IsFlat, CompressionThreshold, ServerSettings};
 
 const START_POS: DVec3 = DVec3::new(0.0, 100.0, 0.0);
 const VIEW_DIST: u8 = 10;
@@ -20,7 +20,7 @@ struct GameState {
 }
 
 #[derive(Component)]
-struct Puppet;
+struct IsPuppet;
 
 #[derive(Component)]
 struct Owner(Entity);
@@ -71,6 +71,7 @@ pub fn main() {
             ..Default::default()
         })
         .add_plugins(DefaultPlugins)
+        .add_systems(EventLoopUpdate, handle_interactions)
         .add_systems(
             Update,
             (
@@ -122,7 +123,7 @@ fn init_clients(
             head_yaw: HeadYaw(0.0),
             ..Default::default()
         }).id();
-        commands.entity(npc_entity_id).insert((Puppet, Owner(entity)));
+        commands.entity(npc_entity_id).insert((IsPuppet, Owner(entity)));
         commands.spawn(PlayerListEntryBundle {
             uuid: npc_id,
             username: Username("Player".into()),
@@ -147,7 +148,7 @@ fn init_clients(
 fn cleanup_clients(
     mut removed: RemovedComponents<Client>,
     clients: Query<&GameState>,
-    puppets: Query<Entity, With<Puppet>>,
+    puppets: Query<Entity, With<IsPuppet>>,
     mut commands: Commands,
 ) {
     for entity in removed.read() {
@@ -166,7 +167,7 @@ fn reset_clients(
         &mut GameState,
         &mut ChunkLayer,
     )>,
-    mut puppets: Query<(&mut Position, &mut Velocity, &Owner), (With<Puppet>, Without<Client>)>,
+    mut puppets: Query<(&mut Position, &mut Velocity, &Owner), (With<IsPuppet>, Without<Client>)>,
 ) {
     for (mut puppet_pos, mut puppet_vel, owner) in puppets.iter_mut() {
         if let Ok((mut client, mut pos, mut state, mut layer)) = clients.get_mut(owner.0) {
@@ -233,7 +234,7 @@ fn manage_chunks(mut clients: Query<(&Position, &OldPosition, &mut ChunkLayer), 
 
 fn manage_blocks(
     mut clients: Query<&mut ChunkLayer, With<Client>>,
-    puppets: Query<(&Position, &Owner), (With<Puppet>, Without<Client>)>,
+    puppets: Query<(&Position, &Owner), (With<IsPuppet>, Without<Client>)>,
 ) {
     for (puppet_pos, owner) in puppets.iter() {
         if let Ok(mut layer) = clients.get_mut(owner.0) {
@@ -265,9 +266,27 @@ fn lock_look(
     }
 }
 
+fn handle_interactions(
+    clients: Query<&GameState>,
+    mut puppets: Query<&mut Velocity, With<IsPuppet>>,
+    mut packets: EventReader<PacketEvent>,
+) {
+    for packet in packets.read() {
+        if let Some(_) = packet.decode::<HandSwingC2s>() {
+            if let Ok(state) = clients.get(packet.client) {
+                if let Ok(mut vel) = puppets.get_mut(state.puppet) {
+                    if vel.0.y == 0.0 {
+                        vel.0.y += 0.5;
+                    }
+                }
+            }
+        }
+    }
+}
+
 fn handle_movement(
     mut clients: Query<(&mut Client, &Position, &OldPosition, &mut GameState), With<Client>>,
-    mut puppets: Query<(&Position, &mut Velocity), (With<Puppet>, Without<Client>)>,
+    mut puppets: Query<(&Position, &mut Velocity), (With<IsPuppet>, Without<Client>)>,
     mut sneaking: EventReader<SneakEvent>,
 ) {
     for event in sneaking.read() {
@@ -304,13 +323,13 @@ fn handle_movement(
 
 fn apply_puppet_physics(
     mut clients: Query<&ChunkLayer, With<Client>>,
-    mut puppets: Query<(&mut Position, &mut Velocity, &Owner), (With<Puppet>, Without<Client>)>,
+    mut puppets: Query<(&mut Position, &mut Velocity, &Owner), (With<IsPuppet>, Without<Client>)>,
 ) {
     for (mut puppet_pos, mut vel, owner) in puppets.iter_mut() {
         if let Ok(layer) = clients.get_mut(owner.0) {
-            vel.0.y -= 0.1;
+            vel.0.y -= 0.05;
             let block = layer.block(BlockPos::from(puppet_pos.0 + DVec3::from(vel.0)));
-            if block.is_some() && block.unwrap().state != BlockState::AIR {
+            if block.is_some() && block.unwrap().state == BlockState::DIRT {
                 vel.0.y = 0.0;
             }
             puppet_pos.0 += DVec3::from(vel.0);
