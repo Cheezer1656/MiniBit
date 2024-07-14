@@ -5,22 +5,41 @@ use std::{
     sync::Arc,
 };
 
-use valence::{entity::{player::PlayerEntityBundle, Velocity}, event_loop::PacketEvent, player_list::{DisplayName, Listed, PlayerListEntryBundle}, prelude::*, protocol::packets::play::HandSwingC2s, spawn::IsFlat, CompressionThreshold, ServerSettings};
+use valence::{
+    entity::{
+        entity::NoGravity,
+        item::{ItemEntity, ItemEntityBundle, Stack},
+        player::{PlayerEntityBundle, PlayerModelParts},
+        Velocity,
+    },
+    event_loop::PacketEvent,
+    math::{IVec3, Vec3Swizzles},
+    player_list::{DisplayName, Listed, PlayerListEntryBundle},
+    prelude::*,
+    protocol::{packets::play::HandSwingC2s, sound::SoundCategory, Sound},
+    spawn::IsFlat,
+    CompressionThreshold, ServerSettings,
+};
 
 const START_POS: DVec3 = DVec3::new(0.0, 100.0, 0.0);
 const VIEW_DIST: u8 = 10;
-const GEN_DIST: i32 = 10;
+const GEN_DIST: i32 = 15;
+const WALL_HEIGHT: i32 = 10;
 const PUPPET_SPEED: f32 = 0.2;
 
 #[derive(Component)]
 struct GameState {
     puppet: Entity,
+    cop: Entity,
     sneaking: bool,
     coins: u32,
 }
 
 #[derive(Component)]
 struct IsPuppet;
+
+#[derive(Component)]
+struct IsCop;
 
 #[derive(Component)]
 struct Owner(Entity);
@@ -83,6 +102,7 @@ pub fn main() {
                 lock_look,
                 handle_movement,
                 apply_puppet_physics.after(handle_movement),
+                check_for_coins,
                 despawn_disconnected_clients,
             ),
         )
@@ -106,7 +126,15 @@ fn init_clients(
     biomes: Res<BiomeRegistry>,
     mut commands: Commands,
 ) {
-    for (entity, mut client, mut visible_chunk_layer, mut visible_entity_layers, mut is_flat, mut game_mode) in clients.iter_mut() {
+    for (
+        entity,
+        mut client,
+        mut visible_chunk_layer,
+        mut visible_entity_layers,
+        mut is_flat,
+        mut game_mode,
+    ) in clients.iter_mut()
+    {
         visible_chunk_layer.0 = entity;
         visible_entity_layers.0.insert(entity);
         is_flat.0 = true;
@@ -114,26 +142,64 @@ fn init_clients(
 
         client.send_chat_message("Welcome to train chase!".italic());
 
-        let npc_id = UniqueId::default();
-        let npc_entity_id = commands.spawn(PlayerEntityBundle {
-            layer: EntityLayerId(entity),
-            uuid: npc_id,
-            position: Position(START_POS + DVec3::new(0.5, 1.0, 0.5)),
-            look: Look::new(0.0, 0.0),
-            head_yaw: HeadYaw(0.0),
-            ..Default::default()
-        }).id();
-        commands.entity(npc_entity_id).insert((IsPuppet, Owner(entity)));
+        let puppet_id = UniqueId::default();
+        let puppet_entity_id = commands
+            .spawn(PlayerEntityBundle {
+                layer: EntityLayerId(entity),
+                uuid: puppet_id,
+                position: Position(START_POS + DVec3::new(0.5, 1.0, 0.5)),
+                look: Look::new(0.0, 0.0),
+                head_yaw: HeadYaw(0.0),
+                player_player_model_parts: PlayerModelParts(126),
+                ..Default::default()
+            })
+            .id();
+        commands
+            .entity(puppet_entity_id)
+            .insert((IsPuppet, Owner(entity)));
+        let mut puppet_props = Properties::default();
+        puppet_props.set_skin("ewogICJ0aW1lc3RhbXAiIDogMTcyMDg5Mzk0ODQzMSwKICAicHJvZmlsZUlkIiA6ICI0OTY5YTVlZTYxMTY0MDBkYTM4YzhmZjRiMWJhZTZiZiIsCiAgInByb2ZpbGVOYW1lIiA6ICJSZWFjdFpJUCIsCiAgInNpZ25hdHVyZVJlcXVpcmVkIiA6IHRydWUsCiAgInRleHR1cmVzIiA6IHsKICAgICJTS0lOIiA6IHsKICAgICAgInVybCIgOiAiaHR0cDovL3RleHR1cmVzLm1pbmVjcmFmdC5uZXQvdGV4dHVyZS8yMzc4NzYzYzY3Mjg5MzllMWI0MDc5OWJjNDY5NWYxZDA4OGRjYzFkOWFhZDQxZWI4MDNjNzVkNDIwYmExZjk1IgogICAgfQogIH0KfQ==", "ax1Jq5CfbvonOQ2xP1wk2dyORpDavqhCvwrhdWblg7AvbthDlyNUHO6mWSSGMZwqHL+2A40DnUEcKsvMJhvjpP4QYUGowv0uCWPO8IemFXdrapZvprIi+TcBBP+FAI55cABR2SuanlBFs2azvT6wBdiBoASFCYr+7IZXhjVZct2siXprwXT0xEVDCw5Zy8mMc23iItDGxjzrNrA2/we6Hfapg+NUUu4xW2tm6SSkeSQi1Ox+TH9H4Z8rLUDv/4w1NB9bZuleS/X/HGHSs1BuS9XzCYuTmzkg9D1CtEVVFv0QgSw6Z7LdrOpls30iMaqbgJbhMUWF2L03gySiQlZEKzKw99SCxmLi9DopOfEBQzPQ2fHwyogjPA/BF7S0jbipZEYv5bcHi9hmjBeEJpRkQWaiJVGpg73btnzBZQHDES64wiNIQrNnKYgT77ClqG+3tfFvfBr44iEcwc+HJjMSZZRak1UsG5e7h7ki0JMV5klHacnvbEV06iW9y4RiO6v4hacMtBixCbVC0ZwGys1uQrSSoW1KJMZYNEW2qarePDGv2XHaJoCRXSnFxMmYPd1CH8q+N/hd5QBK/fXenhYodgYWwHxFhuV0WoI/43dtv7szoudNzm+6Q4piQtLdnl9VrGuLFZaSO0euephdp/Uqq+HnwRdd5Ve/wDqEaepZjsc=");
         commands.spawn(PlayerListEntryBundle {
-            uuid: npc_id,
-            username: Username("Player".into()),
-            display_name: DisplayName("Player".color(Color::RED).into()),
+            uuid: puppet_id,
+            username: Username("Jake".into()),
+            display_name: DisplayName("Jake".color(Color::RED).into()),
             listed: Listed(false),
+            properties: puppet_props,
+            ..Default::default()
+        });
+
+        let cop_id = UniqueId::default();
+        let cop_entity_id = commands
+            .spawn(PlayerEntityBundle {
+                layer: EntityLayerId(entity),
+                uuid: cop_id,
+                position: Position(START_POS + DVec3::new(0.5, 1.0, 0.5)),
+                look: Look::new(0.0, 0.0),
+                head_yaw: HeadYaw(0.0),
+                player_player_model_parts: PlayerModelParts(126),
+                ..Default::default()
+            })
+            .id();
+        commands
+            .entity(cop_entity_id)
+            .insert((IsCop, Owner(entity)));
+        let mut cop_props = Properties::default();
+        cop_props.set_skin(
+            "ewogICJ0aW1lc3RhbXAiIDogMTcyMDU5MDYxODAyOSwKICAicHJvZmlsZUlkIiA6ICJmODg2ZDI3YjhjNzU0NjAyODYyYTM1M2NlYmYwZTgwZiIsCiAgInByb2ZpbGVOYW1lIiA6ICJOb2JpbkdaIiwKICAic2lnbmF0dXJlUmVxdWlyZWQiIDogdHJ1ZSwKICAidGV4dHVyZXMiIDogewogICAgIlNLSU4iIDogewogICAgICAidXJsIiA6ICJodHRwOi8vdGV4dHVyZXMubWluZWNyYWZ0Lm5ldC90ZXh0dXJlL2EwMWU3ZmVhMTRhYjdmNWZhODEzOTY5ZWU2OGI1MmE5YTgzZWI2ODdlN2UwMjEwZDViN2MwOGNmYzYxMDZmOTIiCiAgICB9CiAgfQp9",
+                "jNqgs70maccFU7G4tzmaabM9KI8NhopNtNswHArG2qONucEYLmNwt6TaE1Cr7AXgE2w4OmtZ2/Ov8Lp9YrXomAC74lw58tSw0R6CMdUn/uf5Sz0ByMfspLvoiv23OVewuj76HToNcEAbhMNTeyJbI2ucALohSFY7Z4/iwgf+0OP5qH8YpwyxTtREOlfz/Jfwkn4UgSV+yHTAUoArp7zgmsUQoHdScfrwbm61oPaXWd+kTZgsJKr3FlJwpvd2lJi8fay00O3LY03Dhqz//VWFmRmPnRg4PswF3ATRLxvxc0C594bvsVhp6UuvSiFPJyBGamjTPK552X3rgrN8F1rXgT7U7/p6wH2WJvlIH9XWMc+7xnfatmsXrDqIWDJxdzl1ZRxM144L2GX7YX1gzUg4OLtV/HXCftfpw0cQHq+cjLQ/qDT6laNCxzMiWOEXyj6J450Aph7Bj7IIFDF+Ak+gk34YoGvSzBI0poVqqNPb4Q08T+/5SM32sqg75I0QuIcdJlzprtE4JlmWBUzX4714MNVyH+XWhVyghaX5mEh9sSFZaJfo+ulkGsggotUJL9gEZehF9PdqKySekmWVCG1tVs5/XR13jMhsnPk2Luty+4DVwjOkQnl5jQpdq5SPtEc+D55PJ5MWcy3t3m0kRbRKUf6tZZOOwj26FcO+Llw442I=",
+        );
+        commands.spawn(PlayerListEntryBundle {
+            uuid: cop_id,
+            username: Username("Inspector".into()),
+            display_name: DisplayName("Inspector".color(Color::RED).into()),
+            listed: Listed(false),
+            properties: cop_props,
             ..Default::default()
         });
 
         let state = GameState {
-            puppet: npc_entity_id,
+            puppet: puppet_entity_id,
+            cop: cop_entity_id,
             sneaking: false,
             coins: 0,
         };
@@ -149,6 +215,7 @@ fn cleanup_clients(
     mut removed: RemovedComponents<Client>,
     clients: Query<&GameState>,
     puppets: Query<Entity, With<IsPuppet>>,
+    cops: Query<Entity, With<IsCop>>,
     mut commands: Commands,
 ) {
     for entity in removed.read() {
@@ -156,23 +223,31 @@ fn cleanup_clients(
             if let Ok(puppet) = puppets.get(state.puppet) {
                 commands.entity(puppet).insert(Despawned);
             }
+            if let Ok(cop) = cops.get(state.cop) {
+                commands.entity(cop).insert(Despawned);
+            }
         }
     }
 }
 
 fn reset_clients(
-    mut clients: Query<(
-        &mut Client,
-        &mut Position,
-        &mut GameState,
-        &mut ChunkLayer,
-    )>,
+    mut clients: Query<(&mut Client, &mut Position, &mut GameState, &mut ChunkLayer)>,
     mut puppets: Query<(&mut Position, &mut Velocity, &Owner), (With<IsPuppet>, Without<Client>)>,
+    mut cops: Query<
+        (&mut Position, &mut Velocity),
+        (With<IsCop>, Without<Client>, Without<IsPuppet>),
+    >,
 ) {
     for (mut puppet_pos, mut puppet_vel, owner) in puppets.iter_mut() {
         if let Ok((mut client, mut pos, mut state, mut layer)) = clients.get_mut(owner.0) {
-            let block = layer.block(BlockPos::from(puppet_pos.0.floor()));
-            let touched_block = block.is_some() && block.unwrap().state == BlockState::OAK_SIGN;
+            let block = layer.block(BlockPos::from(
+                puppet_pos.0.floor() + DVec3::new(0.0, 1.0, 0.0),
+            ));
+            let touched_block = if let Some(block) = block {
+                block.state == BlockState::OAK_SIGN || block.state == BlockState::BLACK_CONCRETE
+            } else {
+                false
+            };
             let out_of_bounds = puppet_pos.0.y < START_POS.y - 32_f64;
 
             if out_of_bounds || touched_block || state.is_added() {
@@ -187,6 +262,14 @@ fn reset_clients(
                                 .not_italic()
                             + " coins!".italic(),
                     );
+                    client.send_chat_message(
+                        "Distance traveled: ".italic()
+                            + format!("{:.2}", pos.0.z - START_POS.z)
+                                .color(Color::GREEN)
+                                .bold()
+                                .not_italic()
+                            + " blocks".italic(),
+                    );
                 }
 
                 for pos in ChunkView::new(START_POS.into(), VIEW_DIST).iter() {
@@ -194,9 +277,47 @@ fn reset_clients(
                 }
 
                 for i in -1..=1 {
-                    for j in 0..GEN_DIST {
-                        layer.set_block(BlockPos::new(START_POS.x as i32 + i, START_POS.y as i32, START_POS.z as i32 + j), BlockState::DIRT);
-                        layer.set_block(BlockPos::new(START_POS.x as i32 + i, START_POS.y as i32 + 1, START_POS.z as i32 + j), BlockState::RAIL);
+                    for j in -3..GEN_DIST {
+                        layer.set_block(
+                            BlockPos::new(
+                                START_POS.x as i32 + i,
+                                START_POS.y as i32,
+                                START_POS.z as i32 + j,
+                            ),
+                            BlockState::DIRT,
+                        );
+                        layer.set_block(
+                            BlockPos::new(
+                                START_POS.x as i32 + i,
+                                START_POS.y as i32 + 1,
+                                START_POS.z as i32 + j,
+                            ),
+                            BlockState::RAIL,
+                        );
+                    }
+                }
+                for i in -3..GEN_DIST {
+                    for j in 0..WALL_HEIGHT {
+                        layer.set_block(
+                            BlockPos::new(
+                                START_POS.x as i32 - 2,
+                                START_POS.y as i32 + j,
+                                START_POS.z as i32 + i,
+                            ),
+                            BlockState::STONE_BRICKS,
+                        );
+                    }
+                }
+                for i in -3..GEN_DIST {
+                    for j in 0..WALL_HEIGHT {
+                        layer.set_block(
+                            BlockPos::new(
+                                START_POS.x as i32 + 2,
+                                START_POS.y as i32 + j,
+                                START_POS.z as i32 + i,
+                            ),
+                            BlockState::STONE_BRICKS,
+                        );
                     }
                 }
 
@@ -210,6 +331,11 @@ fn reset_clients(
                 ]);
 
                 pos.0 = puppet_pos.get() + DVec3::new(0.0, 4.0, -4.0);
+
+                if let Ok((mut cop_pos, mut cop_vel)) = cops.get_mut(state.cop) {
+                    cop_vel.0 = Vec3::ZERO;
+                    cop_pos.0 = puppet_pos.get() + DVec3::new(0.0, 0.0, -3.0);
+                }
             }
         }
     }
@@ -234,19 +360,78 @@ fn manage_chunks(mut clients: Query<(&Position, &OldPosition, &mut ChunkLayer), 
 
 fn manage_blocks(
     mut clients: Query<&mut ChunkLayer, With<Client>>,
-    puppets: Query<(&Position, &Owner), (With<IsPuppet>, Without<Client>)>,
+    puppets: Query<(&Position, &EntityLayerId, &Owner), (With<IsPuppet>, Without<Client>)>,
+    mut commands: Commands,
 ) {
-    for (puppet_pos, owner) in puppets.iter() {
+    for (puppet_pos, entity_layer, owner) in puppets.iter() {
         if let Ok(mut layer) = clients.get_mut(owner.0) {
-            match layer.block(BlockPos::new(puppet_pos.0.x.floor() as i32, START_POS.y as i32, puppet_pos.0.z.floor() as i32 + GEN_DIST)) {
+            match layer.block(BlockPos::new(
+                puppet_pos.0.x.floor() as i32,
+                START_POS.y as i32,
+                puppet_pos.0.z.floor() as i32 + GEN_DIST,
+            )) {
                 Some(block) => {
                     if block.state == BlockState::AIR {
+                        for i in 0..WALL_HEIGHT {
+                            layer.set_block(
+                                BlockPos::new(
+                                    START_POS.x as i32 + 2,
+                                    START_POS.y as i32 + i,
+                                    puppet_pos.0.z as i32 + GEN_DIST,
+                                ),
+                                BlockState::STONE_BRICKS,
+                            );
+                        }
+                        for i in 0..WALL_HEIGHT {
+                            layer.set_block(
+                                BlockPos::new(
+                                    START_POS.x as i32 - 2,
+                                    START_POS.y as i32 + i,
+                                    puppet_pos.0.z as i32 + GEN_DIST,
+                                ),
+                                BlockState::STONE_BRICKS,
+                            );
+                        }
                         for i in -1..=1 {
-                            layer.set_block(BlockPos::new(START_POS.x as i32 + i, START_POS.y as i32, puppet_pos.0.z.floor() as i32 + GEN_DIST), BlockState::DIRT);
-                            if fastrand::u8(0..20) == 0 {
-                                layer.set_block(BlockPos::new(START_POS.x as i32 + i, START_POS.y as i32 + 1, puppet_pos.0.z.floor() as i32 + GEN_DIST), BlockState::OAK_SIGN);
-                            } else {
-                                layer.set_block(BlockPos::new(START_POS.x as i32 + i, START_POS.y as i32 + 1, puppet_pos.0.z.floor() as i32 + GEN_DIST), BlockState::RAIL);
+                            let block_pos = BlockPos::new(
+                                START_POS.x as i32 + i,
+                                START_POS.y as i32,
+                                puppet_pos.0.z.floor() as i32 + GEN_DIST,
+                            );
+                            layer.set_block(block_pos, BlockState::DIRT);
+                            match fastrand::u8(0..60) {
+                                0..=2 => layer.set_block(
+                                    block_pos + IVec3::new(0, 1, 0),
+                                    BlockState::OAK_SIGN,
+                                ),
+                                3 => {
+                                    for i in 1..fastrand::u8(3..=5) {
+                                        layer.set_block(
+                                            block_pos + IVec3::new(0, 1, -(i as i32)),
+                                            BlockState::BLACK_CONCRETE,
+                                        );
+                                    }
+                                    layer.set_block(
+                                        block_pos + IVec3::new(0, 1, 0),
+                                        BlockState::BLACK_CONCRETE,
+                                    )
+                                },
+                                _ => layer
+                                    .set_block(block_pos + IVec3::new(0, 1, 0), BlockState::RAIL),
+                            };
+                            if fastrand::u8(0..10) == 0 {
+                                commands.spawn(ItemEntityBundle {
+                                    item_stack: Stack(ItemStack::new(ItemKind::GoldBlock, 1, None)),
+                                    position: Position(DVec3::new(
+                                        block_pos.x as f64,
+                                        block_pos.y as f64 + fastrand::u8(1..=3) as f64,
+                                        block_pos.z as f64,
+                                    )),
+                                    velocity: Velocity(Vec3::ZERO),
+                                    entity_no_gravity: NoGravity(true),
+                                    layer: *entity_layer,
+                                    ..Default::default()
+                                });
                             }
                         }
                     }
@@ -257,9 +442,7 @@ fn manage_blocks(
     }
 }
 
-fn lock_look(
-    mut clients: Query<&mut Look, With<Client>>
-) {
+fn lock_look(mut clients: Query<&mut Look, With<Client>>) {
     for mut look in clients.iter_mut() {
         look.yaw = 0.0;
         look.pitch = 40.0;
@@ -296,8 +479,14 @@ fn handle_movement(
     }
     for (mut client, pos, old_pos, state) in clients.iter_mut() {
         if let Ok((puppet_pos, mut puppet_vel)) = puppets.get_mut(state.puppet) {
-            if pos.0 != puppet_pos.get() + DVec3::new(0.0, 4.0, -4.0) && (pos.0*100.0).round()/100.0 != (old_pos.get()*100.0).round()/100.0 {
-                let vel = Vec3::new((pos.0.x - old_pos.get().x) as f32, (pos.0.y - old_pos.get().y) as f32, (pos.0.z - old_pos.get().z) as f32) * 2.0;
+            if pos.0 != puppet_pos.get() + DVec3::new(0.0, 4.0, -4.0)
+                && (pos.0 * 100.0).round() / 100.0 != (old_pos.get() * 100.0).round() / 100.0
+            {
+                let vel = Vec3::new(
+                    (pos.0.x - old_pos.get().x) as f32,
+                    (pos.0.y - old_pos.get().y) as f32,
+                    (pos.0.z - old_pos.get().z) as f32,
+                ) * 2.0;
                 if vel.x != 0.0 {
                     puppet_vel.0.x = vel.x;
                 }
@@ -322,21 +511,62 @@ fn handle_movement(
 }
 
 fn apply_puppet_physics(
-    mut clients: Query<&ChunkLayer, With<Client>>,
-    mut puppets: Query<(&mut Position, &mut Velocity, &Owner), (With<IsPuppet>, Without<Client>)>,
+    mut clients: Query<(&mut Client, &ChunkLayer), With<Client>>,
+    mut puppets: Query<
+        (&mut Position, &mut Velocity, &Owner),
+        (Or<(With<IsPuppet>, With<IsCop>)>, Without<Client>),
+    >,
 ) {
     for (mut puppet_pos, mut vel, owner) in puppets.iter_mut() {
-        if let Ok(layer) = clients.get_mut(owner.0) {
-            vel.0.y -= 0.05;
+        if let Ok((  mut client, layer)) = clients.get_mut(owner.0) {
             let block = layer.block(BlockPos::from(puppet_pos.0 + DVec3::from(vel.0)));
-            if block.is_some() && block.unwrap().state == BlockState::DIRT {
-                vel.0.y = 0.0;
+            vel.0.y = if let Some(block) = block {
+                if block.state == BlockState::DIRT || block.state == BlockState::BLACK_CONCRETE {
+                    0.0
+                } else {
+                    vel.0.y - 0.05
+                }
+            } else {
+                vel.0.y - 0.05
+            };
+            if vel.0.x != 0.0 {
+                vel.0.x -= vel.0.x * 0.1;
+            }
+            if puppet_pos.x > 1.5 {
+                puppet_pos.0.x = 1.5;
+                // client.set_velocity(Vec3::new(-2.0, vel.0.y, vel.0.z));
+            } else if puppet_pos.x < -0.5 {
+                puppet_pos.0.x = -0.5;
+                // client.set_velocity(Vec3::new(2.0, vel.0.y, vel.0.z));
             }
             puppet_pos.0 += DVec3::from(vel.0);
-            if vel.0.x != 0.0 {
-                vel.0.x -= vel.0.x*0.1;
-            }
             vel.0.z = PUPPET_SPEED;
+        }
+    }
+}
+
+fn check_for_coins(
+    mut clients: Query<(&mut Client, &mut GameState), With<Client>>,
+    puppets: Query<(&Position, &Owner), With<IsPuppet>>,
+    items: Query<(Entity, &Position, &Stack), With<ItemEntity>>,
+    mut commands: Commands,
+) {
+    for (pos, owner) in puppets.iter() {
+        if let Ok((mut client, mut state)) = clients.get_mut(owner.0) {
+            for (entity, item_pos, stack) in items.iter() {
+                let diff = pos.0 - item_pos.0;
+                if diff.xz().length() < 1.0 && diff.y < 2.0 {
+                    client.play_sound(
+                        Sound::EntityArrowHitPlayer,
+                        SoundCategory::Master,
+                        pos.0,
+                        1.0,
+                        1.0,
+                    );
+                    state.coins += stack.0.count as u32;
+                    commands.entity(entity).insert(Despawned);
+                }
+            }
         }
     }
 }
