@@ -511,14 +511,14 @@ fn handle_movement(
 }
 
 fn apply_puppet_physics(
-    mut clients: Query<(&mut Client, &ChunkLayer), With<Client>>,
+    clients: Query<&ChunkLayer, With<Client>>,
     mut puppets: Query<
         (&mut Position, &mut Velocity, &Owner),
         (Or<(With<IsPuppet>, With<IsCop>)>, Without<Client>),
     >,
 ) {
     for (mut puppet_pos, mut vel, owner) in puppets.iter_mut() {
-        if let Ok((  mut client, layer)) = clients.get_mut(owner.0) {
+        if let Ok(layer) = clients.get(owner.0) {
             let block = layer.block(BlockPos::from(puppet_pos.0 + DVec3::from(vel.0)));
             vel.0.y = if let Some(block) = block {
                 if block.state == BlockState::DIRT || block.state == BlockState::BLACK_CONCRETE {
@@ -534,10 +534,8 @@ fn apply_puppet_physics(
             }
             if puppet_pos.x > 1.5 {
                 puppet_pos.0.x = 1.5;
-                // client.set_velocity(Vec3::new(-2.0, vel.0.y, vel.0.z));
             } else if puppet_pos.x < -0.5 {
                 puppet_pos.0.x = -0.5;
-                // client.set_velocity(Vec3::new(2.0, vel.0.y, vel.0.z));
             }
             puppet_pos.0 += DVec3::from(vel.0);
             vel.0.z = PUPPET_SPEED;
@@ -554,8 +552,8 @@ fn check_for_coins(
     for (pos, owner) in puppets.iter() {
         if let Ok((mut client, mut state)) = clients.get_mut(owner.0) {
             for (entity, item_pos, stack) in items.iter() {
-                let diff = pos.0 - item_pos.0;
-                if diff.xz().length() < 1.0 && diff.y < 2.0 {
+                let diff = item_pos.0 - pos.0;
+                if diff.xz().length() < 1.0 && diff.y < 1.8 && diff.y > 0.0 {
                     client.play_sound(
                         Sound::EntityArrowHitPlayer,
                         SoundCategory::Master,
