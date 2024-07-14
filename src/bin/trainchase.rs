@@ -7,18 +7,8 @@ use std::{
 
 use valence::{
     entity::{
-        entity::NoGravity,
-        item::{ItemEntity, ItemEntityBundle, Stack},
-        player::{PlayerEntityBundle, PlayerModelParts},
-        Velocity,
-    },
-    event_loop::PacketEvent,
-    math::{IVec3, Vec3Swizzles},
-    player_list::{DisplayName, Listed, PlayerListEntryBundle},
-    prelude::*,
-    protocol::{packets::play::HandSwingC2s, sound::SoundCategory, Sound},
-    spawn::IsFlat,
-    CompressionThreshold, ServerSettings,
+        active_status_effects::{ActiveStatusEffect, ActiveStatusEffects}, entity::NoGravity, item::{ItemEntity, ItemEntityBundle, Stack}, player::{PlayerEntityBundle, PlayerModelParts}, sheep::SheepEntityBundle, Velocity
+    }, math::{IVec3, Vec3Swizzles}, player_list::{DisplayName, Listed, PlayerListEntryBundle}, prelude::*, protocol::{sound::SoundCategory, Sound}, spawn::IsFlat, status_effects::StatusEffect, CompressionThreshold, ServerSettings
 };
 
 const START_POS: DVec3 = DVec3::new(0.0, 100.0, 0.0);
@@ -31,6 +21,7 @@ const PUPPET_SPEED: f32 = 0.2;
 struct GameState {
     puppet: Entity,
     cop: Entity,
+    target: Entity,
     sneaking: bool,
     coins: u32,
 }
@@ -40,6 +31,9 @@ struct IsPuppet;
 
 #[derive(Component)]
 struct IsCop;
+
+#[derive(Component)]
+struct IsTarget;
 
 #[derive(Component)]
 struct Owner(Entity);
@@ -101,7 +95,8 @@ pub fn main() {
                 manage_blocks,
                 lock_look,
                 handle_movement,
-                apply_puppet_physics.after(handle_movement),
+                apply_physics.after(handle_movement),
+                move_target,
                 check_for_coins,
                 despawn_disconnected_clients,
             ),
@@ -197,9 +192,20 @@ fn init_clients(
             ..Default::default()
         });
 
+        let mut effects = ActiveStatusEffects::default();
+        effects.apply(ActiveStatusEffect::from_effect(StatusEffect::Invisibility).with_infinite());
+        let target_entity_id = commands.spawn(SheepEntityBundle {
+            layer: EntityLayerId(entity),
+            velocity: Velocity(Vec3::ZERO),
+            entity_no_gravity: NoGravity(true),
+            living_active_status_effects: effects,
+            ..Default::default()
+        }).insert((IsTarget, Owner(entity))).id();
+
         let state = GameState {
             puppet: puppet_entity_id,
             cop: cop_entity_id,
+            target: target_entity_id,
             sneaking: false,
             coins: 0,
         };
@@ -244,7 +250,7 @@ fn reset_clients(
                 puppet_pos.0.floor() + DVec3::new(0.0, 1.0, 0.0),
             ));
             let touched_block = if let Some(block) = block {
-                block.state == BlockState::OAK_SIGN || block.state == BlockState::BLACK_CONCRETE
+                block.state != BlockState::AIR && block.state != BlockState::RAIL
             } else {
                 false
             };
@@ -400,24 +406,30 @@ fn manage_blocks(
                             );
                             layer.set_block(block_pos, BlockState::DIRT);
                             match fastrand::u8(0..60) {
-                                0..=2 => layer.set_block(
-                                    block_pos + IVec3::new(0, 1, 0),
-                                    BlockState::OAK_SIGN,
-                                ),
-                                3 => {
-                                    for i in 1..fastrand::u8(3..=5) {
-                                        layer.set_block(
-                                            block_pos + IVec3::new(0, 1, -(i as i32)),
-                                            BlockState::BLACK_CONCRETE,
-                                        );
-                                    }
+                                0..=2 => {
                                     layer.set_block(
                                         block_pos + IVec3::new(0, 1, 0),
-                                        BlockState::BLACK_CONCRETE,
-                                    )
-                                },
-                                _ => layer
-                                    .set_block(block_pos + IVec3::new(0, 1, 0), BlockState::RAIL),
+                                        BlockState::OAK_SIGN,
+                                    );
+                                }
+                                3 => {
+                                    for i in 0..fastrand::u8(3..=5) {
+                                        layer.set_block(
+                                            block_pos + IVec3::new(0, 1, -(i as i32)),
+                                            BlockState::GRAY_CONCRETE,
+                                        );
+                                        layer.set_block(
+                                            block_pos + IVec3::new(0, 2, -(i as i32)),
+                                            BlockState::LIGHT_GRAY_CONCRETE,
+                                        );
+                                    }
+                                }
+                                _ => {
+                                    layer.set_block(
+                                        block_pos + IVec3::new(0, 1, 0),
+                                        BlockState::RAIL,
+                                    );
+                                }
                             };
                             if fastrand::u8(0..10) == 0 {
                                 commands.spawn(ItemEntityBundle {
@@ -452,15 +464,19 @@ fn lock_look(mut clients: Query<&mut Look, With<Client>>) {
 fn handle_interactions(
     clients: Query<&GameState>,
     mut puppets: Query<&mut Velocity, With<IsPuppet>>,
-    mut packets: EventReader<PacketEvent>,
+    mut interactions: EventReader<InteractEntityEvent>,
 ) {
-    for packet in packets.read() {
-        if let Some(_) = packet.decode::<HandSwingC2s>() {
-            if let Ok(state) = clients.get(packet.client) {
-                if let Ok(mut vel) = puppets.get_mut(state.puppet) {
-                    if vel.0.y == 0.0 {
-                        vel.0.y += 0.5;
-                    }
+    for event in interactions.read() {
+        if let Ok(state) = clients.get(event.client) {
+            if let Ok(mut vel) = puppets.get_mut(state.puppet) {
+                println!("{:?}", event.interact);
+                match event.interact {
+                    EntityInteraction::Attack => {
+                        if vel.0.y == 0.0 {
+                            vel.0.y += 0.5;
+                        }
+                    },
+                    _ => {}
                 }
             }
         }
@@ -510,18 +526,18 @@ fn handle_movement(
     }
 }
 
-fn apply_puppet_physics(
+fn apply_physics(
     clients: Query<&ChunkLayer, With<Client>>,
-    mut puppets: Query<
+    mut npcs: Query<
         (&mut Position, &mut Velocity, &Owner),
         (Or<(With<IsPuppet>, With<IsCop>)>, Without<Client>),
     >,
 ) {
-    for (mut puppet_pos, mut vel, owner) in puppets.iter_mut() {
+    for (mut puppet_pos, mut vel, owner) in npcs.iter_mut() {
         if let Ok(layer) = clients.get(owner.0) {
             let block = layer.block(BlockPos::from(puppet_pos.0 + DVec3::from(vel.0)));
             vel.0.y = if let Some(block) = block {
-                if block.state == BlockState::DIRT || block.state == BlockState::BLACK_CONCRETE {
+                if block.state != BlockState::AIR && block.state != BlockState::RAIL && block.state != BlockState::OAK_SIGN {
                     0.0
                 } else {
                     vel.0.y - 0.05
@@ -539,6 +555,17 @@ fn apply_puppet_physics(
             }
             puppet_pos.0 += DVec3::from(vel.0);
             vel.0.z = PUPPET_SPEED;
+        }
+    }
+}
+
+fn move_target(
+    clients: Query<(&Position, &GameState), With<Client>>,
+    mut targets: Query<&mut Position, (With<IsTarget>, Without<Client>)>,
+) {
+    for (pos, state) in clients.iter() {
+        if let Ok(mut target_pos) = targets.get_mut(state.target) {
+            target_pos.0 = pos.0 + DVec3::new(0.0, 0.0, 2.0);
         }
     }
 }
