@@ -2,13 +2,31 @@
 
 use std::{
     net::{IpAddr, Ipv4Addr, SocketAddr},
-    sync::Arc, time::{Duration, Instant},
+    sync::Arc,
+    time::{Duration, Instant},
 };
 
 use valence::{
     entity::{
-        entity::{self, NoGravity}, item::{ItemEntity, ItemEntityBundle, Stack}, player::{PlayerEntityBundle, PlayerModelParts}, Pose, Velocity
-    }, event_loop::PacketEvent, math::{IVec3, Vec3Swizzles}, player_list::{DisplayName, Listed, PlayerListEntryBundle}, prelude::*, protocol::{packets::play::HandSwingC2s, sound::SoundCategory, Sound}, spawn::IsFlat, CompressionThreshold, ServerSettings
+        entity::{self, NoGravity},
+        item::{ItemEntity, ItemEntityBundle, Stack},
+        player::{PlayerEntityBundle, PlayerModelParts},
+        EntityId, Pose, Velocity,
+    },
+    event_loop::PacketEvent,
+    math::{IVec3, Vec3Swizzles},
+    player_list::{DisplayName, Listed, PlayerListEntryBundle},
+    prelude::*,
+    protocol::{
+        packets::play::{
+            entity_equipment_update_s2c::EquipmentEntry, EntityAnimationS2c,
+            EntityEquipmentUpdateS2c, HandSwingC2s,
+        },
+        sound::SoundCategory,
+        Sound, VarInt, WritePacket,
+    },
+    spawn::IsFlat,
+    CompressionThreshold, ServerSettings,
 };
 
 const START_POS: DVec3 = DVec3::new(0.0, 100.0, 0.0);
@@ -17,8 +35,15 @@ const GEN_DIST: i32 = 15;
 const WALL_HEIGHT: i32 = 10;
 const PUPPET_SPEED: f32 = 0.2;
 
+#[derive(Resource)]
+struct Tick(u64);
+
+#[derive(Component)]
+struct GameStarted;
+
 #[derive(Component)]
 struct GameState {
+    start: u64,
     puppet: Entity,
     cop: Entity,
     sneaking: bool,
@@ -85,13 +110,16 @@ pub fn main() {
             ..Default::default()
         })
         .add_plugins(DefaultPlugins)
+        .insert_resource(Tick(0))
         .add_systems(EventLoopUpdate, handle_interactions)
         .add_systems(
             Update,
             (
+                increment_tick,
                 init_clients,
                 cleanup_clients,
                 reset_clients.before(handle_movement),
+                play_animation.after(increment_tick).after(init_clients),
                 manage_chunks,
                 manage_blocks,
                 lock_look,
@@ -105,7 +133,12 @@ pub fn main() {
         .run();
 }
 
+fn increment_tick(mut tick: ResMut<Tick>) {
+    tick.0 += 1;
+}
+
 fn init_clients(
+    tick: Res<Tick>,
     mut clients: Query<
         (
             Entity,
@@ -143,16 +176,18 @@ fn init_clients(
             .spawn(PlayerEntityBundle {
                 layer: EntityLayerId(entity),
                 uuid: puppet_id,
-                position: Position(START_POS + DVec3::new(0.5, 1.0, 0.5)),
-                look: Look::new(0.0, 0.0),
-                head_yaw: HeadYaw(0.0),
+                position: Position(START_POS + DVec3::new(0.0, 1.0, 0.5)),
+                look: Look::new(90.0, 0.0),
+                head_yaw: HeadYaw(90.0),
                 player_player_model_parts: PlayerModelParts(126),
                 ..Default::default()
             })
             .id();
-        commands
-            .entity(puppet_entity_id)
-            .insert((IsPuppet, Owner(entity), DuckingState { time: None }));
+        commands.entity(puppet_entity_id).insert((
+            IsPuppet,
+            Owner(entity),
+            DuckingState { time: None },
+        ));
         let mut puppet_props = Properties::default();
         puppet_props.set_skin("ewogICJ0aW1lc3RhbXAiIDogMTcyMDg5Mzk0ODQzMSwKICAicHJvZmlsZUlkIiA6ICI0OTY5YTVlZTYxMTY0MDBkYTM4YzhmZjRiMWJhZTZiZiIsCiAgInByb2ZpbGVOYW1lIiA6ICJSZWFjdFpJUCIsCiAgInNpZ25hdHVyZVJlcXVpcmVkIiA6IHRydWUsCiAgInRleHR1cmVzIiA6IHsKICAgICJTS0lOIiA6IHsKICAgICAgInVybCIgOiAiaHR0cDovL3RleHR1cmVzLm1pbmVjcmFmdC5uZXQvdGV4dHVyZS8yMzc4NzYzYzY3Mjg5MzllMWI0MDc5OWJjNDY5NWYxZDA4OGRjYzFkOWFhZDQxZWI4MDNjNzVkNDIwYmExZjk1IgogICAgfQogIH0KfQ==", "ax1Jq5CfbvonOQ2xP1wk2dyORpDavqhCvwrhdWblg7AvbthDlyNUHO6mWSSGMZwqHL+2A40DnUEcKsvMJhvjpP4QYUGowv0uCWPO8IemFXdrapZvprIi+TcBBP+FAI55cABR2SuanlBFs2azvT6wBdiBoASFCYr+7IZXhjVZct2siXprwXT0xEVDCw5Zy8mMc23iItDGxjzrNrA2/we6Hfapg+NUUu4xW2tm6SSkeSQi1Ox+TH9H4Z8rLUDv/4w1NB9bZuleS/X/HGHSs1BuS9XzCYuTmzkg9D1CtEVVFv0QgSw6Z7LdrOpls30iMaqbgJbhMUWF2L03gySiQlZEKzKw99SCxmLi9DopOfEBQzPQ2fHwyogjPA/BF7S0jbipZEYv5bcHi9hmjBeEJpRkQWaiJVGpg73btnzBZQHDES64wiNIQrNnKYgT77ClqG+3tfFvfBr44iEcwc+HJjMSZZRak1UsG5e7h7ki0JMV5klHacnvbEV06iW9y4RiO6v4hacMtBixCbVC0ZwGys1uQrSSoW1KJMZYNEW2qarePDGv2XHaJoCRXSnFxMmYPd1CH8q+N/hd5QBK/fXenhYodgYWwHxFhuV0WoI/43dtv7szoudNzm+6Q4piQtLdnl9VrGuLFZaSO0euephdp/Uqq+HnwRdd5Ve/wDqEaepZjsc=");
         commands.spawn(PlayerListEntryBundle {
@@ -169,7 +204,7 @@ fn init_clients(
             .spawn(PlayerEntityBundle {
                 layer: EntityLayerId(entity),
                 uuid: cop_id,
-                position: Position(START_POS + DVec3::new(0.5, 1.0, 0.5)),
+                position: Position(START_POS + DVec3::new(0.5, 1.0, -6.5)),
                 look: Look::new(0.0, 0.0),
                 head_yaw: HeadYaw(0.0),
                 player_player_model_parts: PlayerModelParts(126),
@@ -194,14 +229,19 @@ fn init_clients(
         });
 
         let state = GameState {
+            start: tick.0,
             puppet: puppet_entity_id,
             cop: cop_entity_id,
             sneaking: false,
             coins: 0,
         };
 
-        let layer = ChunkLayer::new(ident!("overworld"), &dimensions, &biomes, &server);
+        let mut layer = ChunkLayer::new(ident!("overworld"), &dimensions, &biomes, &server);
         let entity_layer = EntityLayer::new(&server);
+
+        for pos in ChunkView::new(START_POS.into(), VIEW_DIST).iter() {
+            layer.insert_chunk(pos, UnloadedChunk::new());
+        }
 
         commands.entity(entity).insert((state, layer, entity_layer));
     }
@@ -227,15 +267,33 @@ fn cleanup_clients(
 }
 
 fn reset_clients(
-    mut clients: Query<(&mut Client, &mut Position, &mut GameState, &mut ChunkLayer)>,
-    mut puppets: Query<(&mut Position, &mut Velocity, &DuckingState, &Owner), (With<IsPuppet>, Without<Client>)>,
+    mut clients: Query<(
+        &mut Client,
+        &mut Position,
+        &mut GameState,
+        &mut GameStarted,
+        &mut ChunkLayer,
+    )>,
+    mut puppets: Query<
+        (
+            &mut Position,
+            &mut Velocity,
+            &mut Look,
+            &mut HeadYaw,
+            &DuckingState,
+            &Owner,
+        ),
+        (With<IsPuppet>, Without<Client>),
+    >,
     mut cops: Query<
         (&mut Position, &mut Velocity),
         (With<IsCop>, Without<Client>, Without<IsPuppet>),
     >,
 ) {
-    for (mut puppet_pos, mut puppet_vel, ducking, owner) in puppets.iter_mut() {
-        if let Ok((mut client, mut pos, mut state, mut layer)) = clients.get_mut(owner.0) {
+    for (mut puppet_pos, mut puppet_vel, mut puppet_look, mut puppet_yaw, ducking, owner) in
+        puppets.iter_mut()
+    {
+        if let Ok((mut client, mut pos, mut state, started, mut layer)) = clients.get_mut(owner.0) {
             let block1 = layer.block(BlockPos::from(
                 puppet_pos.0.floor() + DVec3::new(0.0, 1.0, 0.0),
             ));
@@ -254,8 +312,12 @@ fn reset_clients(
             };
             let out_of_bounds = puppet_pos.0.y < START_POS.y - 32_f64;
 
-            if out_of_bounds || touched_block1 || (touched_block2 && ducking.time.is_none()) || state.is_added() {
-                if touched_block1 && !state.is_added() {
+            if out_of_bounds
+                || touched_block1
+                || (touched_block2 && ducking.time.is_none())
+                || started.is_added()
+            {
+                if touched_block1 || (touched_block2 && ducking.time.is_none()) {
                     client.send_chat_message(
                         "You got ".italic()
                             + state
@@ -274,60 +336,17 @@ fn reset_clients(
                                 .not_italic()
                             + " blocks".italic(),
                     );
-                }
-
-                for pos in ChunkView::new(START_POS.into(), VIEW_DIST).iter() {
-                    layer.insert_chunk(pos, UnloadedChunk::new());
-                }
-
-                for i in -1..=1 {
-                    for j in -3..GEN_DIST {
-                        layer.set_block(
-                            BlockPos::new(
-                                START_POS.x as i32 + i,
-                                START_POS.y as i32,
-                                START_POS.z as i32 + j,
-                            ),
-                            BlockState::DIRT,
-                        );
-                        layer.set_block(
-                            BlockPos::new(
-                                START_POS.x as i32 + i,
-                                START_POS.y as i32 + 1,
-                                START_POS.z as i32 + j,
-                            ),
-                            BlockState::RAIL,
-                        );
+                    for pos in ChunkView::new(START_POS.into(), VIEW_DIST).iter() {
+                        layer.insert_chunk(pos, UnloadedChunk::new());
                     }
-                }
-                for i in -3..GEN_DIST {
-                    for j in 0..WALL_HEIGHT {
-                        layer.set_block(
-                            BlockPos::new(
-                                START_POS.x as i32 - 2,
-                                START_POS.y as i32 + j,
-                                START_POS.z as i32 + i,
-                            ),
-                            BlockState::STONE_BRICKS,
-                        );
-                    }
-                }
-                for i in -3..GEN_DIST {
-                    for j in 0..WALL_HEIGHT {
-                        layer.set_block(
-                            BlockPos::new(
-                                START_POS.x as i32 + 2,
-                                START_POS.y as i32 + j,
-                                START_POS.z as i32 + i,
-                            ),
-                            BlockState::STONE_BRICKS,
-                        );
-                    }
+                    gen_starting_blocks(&mut layer, 3);
                 }
 
                 state.coins = 0;
 
-                puppet_vel.0 = Vec3::ZERO;
+                puppet_look.yaw = 0.0;
+                puppet_yaw.0 = 0.0;
+                puppet_vel.0 = Vec3::new(0.0, 0.0, PUPPET_SPEED);
                 puppet_pos.set([
                     f64::from(START_POS.x) + 0.5,
                     f64::from(START_POS.y) + 1.0,
@@ -337,10 +356,132 @@ fn reset_clients(
                 pos.0 = puppet_pos.get() + DVec3::new(0.0, 4.0, -4.0);
 
                 if let Ok((mut cop_pos, mut cop_vel)) = cops.get_mut(state.cop) {
-                    cop_vel.0 = Vec3::ZERO;
+                    cop_vel.0 = Vec3::new(0.0, 0.0, PUPPET_SPEED);
                     cop_pos.0 = puppet_pos.get() + DVec3::new(0.0, 0.0, -3.0);
                 }
             }
+        }
+    }
+}
+
+fn gen_starting_blocks(layer: &mut ChunkLayer, blocks_behind: u8) {
+    let blocks_behind = -(blocks_behind as i32);
+    for i in -1..=1 {
+        for j in blocks_behind..GEN_DIST {
+            layer.set_block(
+                BlockPos::new(
+                    START_POS.x as i32 + i,
+                    START_POS.y as i32,
+                    START_POS.z as i32 + j,
+                ),
+                BlockState::DIRT,
+            );
+            layer.set_block(
+                BlockPos::new(
+                    START_POS.x as i32 + i,
+                    START_POS.y as i32 + 1,
+                    START_POS.z as i32 + j,
+                ),
+                BlockState::RAIL,
+            );
+        }
+    }
+    for i in blocks_behind..GEN_DIST {
+        for j in 0..WALL_HEIGHT {
+            layer.set_block(
+                BlockPos::new(
+                    START_POS.x as i32 - 2,
+                    START_POS.y as i32 + j,
+                    START_POS.z as i32 + i,
+                ),
+                BlockState::STONE_BRICKS,
+            );
+        }
+    }
+    for i in blocks_behind..GEN_DIST {
+        for j in 0..WALL_HEIGHT {
+            layer.set_block(
+                BlockPos::new(
+                    START_POS.x as i32 + 2,
+                    START_POS.y as i32 + j,
+                    START_POS.z as i32 + i,
+                ),
+                BlockState::STONE_BRICKS,
+            );
+        }
+    }
+}
+
+fn play_animation(
+    tick: Res<Tick>,
+    mut clients: Query<
+        (
+            Entity,
+            &mut Client,
+            &mut Position,
+            &mut Look,
+            &mut ChunkLayer,
+            &GameState,
+        ),
+        Without<GameStarted>,
+    >,
+    mut puppets: Query<(&EntityId, &mut Position, &mut HeadYaw), (With<IsPuppet>, Without<Client>)>,
+    mut cops: Query<(&EntityId, &mut Position), (With<IsCop>, Without<IsPuppet>, Without<Client>)>,
+    mut commands: Commands,
+) {
+    for (entity, mut client, mut pos, mut look, mut layer, state) in clients.iter_mut() {
+        let Ok((puppet_id, _puppet_pos, mut puppet_yaw)) = puppets.get_mut(state.puppet) else {
+            continue;
+        };
+        let Ok((cop_id, mut cop_pos)) = cops.get_mut(state.cop) else {
+            continue;
+        };
+        match tick.0 - state.start {
+            2 => {
+                gen_starting_blocks(&mut layer, 10);
+                pos.0 = START_POS + DVec3::new(1.75, 1.0, 1.0);
+                look.yaw = 145.0;
+                look.pitch = 20.0;
+                client.write_packet(&EntityEquipmentUpdateS2c {
+                    entity_id: VarInt(puppet_id.get()),
+                    equipment: vec![EquipmentEntry {
+                        slot: 0,
+                        item: ItemStack::new(ItemKind::Potion, 1, None),
+                    }],
+                });
+            }
+            4 | 10 | 16 | 24 | 30 | 36 => {
+                client.write_packet(&EntityAnimationS2c {
+                    entity_id: VarInt(puppet_id.get()),
+                    animation: 0,
+                });
+            }
+            37..=49 => {
+                puppet_yaw.0 += 3.0;
+            }
+            50 => {
+                client.write_packet(&EntityEquipmentUpdateS2c {
+                    entity_id: VarInt(puppet_id.get()),
+                    equipment: vec![EquipmentEntry {
+                        slot: 0,
+                        item: ItemStack::EMPTY,
+                    }],
+                });
+            }
+            30..=69 => {
+                cop_pos.0.z += 0.2;
+            }
+            70 => {
+                client.send_chat_message("Inspector: STOP!".color(Color::RED).bold());
+                client.write_packet(&EntityAnimationS2c {
+                    entity_id: VarInt(cop_id.get()),
+                    animation: 0,
+                });
+            }
+            100 => {
+                commands.entity(entity).insert(GameStarted);
+            }
+            _ => {}
         }
     }
 }
@@ -409,13 +550,13 @@ fn manage_blocks(
                                         block_pos + IVec3::new(0, 1, 0),
                                         BlockState::OAK_SIGN,
                                     );
-                                },
+                                }
                                 3..=4 => {
                                     layer.set_block(
                                         block_pos + IVec3::new(0, 2, 0),
                                         BlockState::OAK_SIGN,
                                     );
-                                },
+                                }
                                 5 => {
                                     for i in 0..fastrand::u8(3..=5) {
                                         layer.set_block(
@@ -458,7 +599,7 @@ fn manage_blocks(
     }
 }
 
-fn lock_look(mut clients: Query<&mut Look, With<Client>>) {
+fn lock_look(mut clients: Query<&mut Look, (With<Client>, With<GameStarted>)>) {
     for mut look in clients.iter_mut() {
         look.yaw = 0.0;
         look.pitch = 40.0;
@@ -466,9 +607,9 @@ fn lock_look(mut clients: Query<&mut Look, With<Client>>) {
 }
 
 fn handle_interactions(
-    clients: Query<&GameState>,
+    clients: Query<&GameState, With<GameStarted>>,
     mut puppets: Query<(&mut DuckingState, &mut entity::Pose), With<IsPuppet>>,
-    mut packets: EventReader<PacketEvent>,  
+    mut packets: EventReader<PacketEvent>,
 ) {
     for packet in packets.read() {
         if let Some(_) = packet.decode::<HandSwingC2s>() {
@@ -483,7 +624,7 @@ fn handle_interactions(
 }
 
 fn handle_movement(
-    mut clients: Query<(&mut Client, &Position, &OldPosition, &mut GameState), With<Client>>,
+    mut clients: Query<(&mut Client, &Position, &OldPosition, &mut GameState), With<GameStarted>>,
     mut puppets: Query<(&Position, &mut Velocity), (With<IsPuppet>, Without<Client>)>,
     mut sneaking: EventReader<SneakEvent>,
 ) {
@@ -529,7 +670,7 @@ fn handle_movement(
 }
 
 fn apply_physics(
-    clients: Query<&ChunkLayer, With<Client>>,
+    clients: Query<&ChunkLayer, (With<Client>, With<GameStarted>)>,
     mut npcs: Query<
         (&mut Position, &mut Velocity, &Owner),
         (Or<(With<IsPuppet>, With<IsCop>)>, Without<Client>),
@@ -539,7 +680,10 @@ fn apply_physics(
         if let Ok(layer) = clients.get(owner.0) {
             let block = layer.block(BlockPos::from(puppet_pos.0 + DVec3::from(vel.0)));
             vel.0.y = if let Some(block) = block {
-                if block.state != BlockState::AIR && block.state != BlockState::RAIL && block.state != BlockState::OAK_SIGN {
+                if block.state != BlockState::AIR
+                    && block.state != BlockState::RAIL
+                    && block.state != BlockState::OAK_SIGN
+                {
                     0.0
                 } else {
                     vel.0.y - 0.05
@@ -556,7 +700,6 @@ fn apply_physics(
                 puppet_pos.0.x = -0.5;
             }
             puppet_pos.0 += DVec3::from(vel.0);
-            vel.0.z = PUPPET_SPEED;
         }
     }
 }
@@ -587,9 +730,7 @@ fn check_for_coins(
     }
 }
 
-fn stop_ducking(
-    mut puppets: Query<(&mut DuckingState, &mut entity::Pose), With<IsPuppet>>,
-) {
+fn stop_ducking(mut puppets: Query<(&mut DuckingState, &mut entity::Pose), With<IsPuppet>>) {
     for (mut ducking, mut pose) in puppets.iter_mut() {
         if let Some(time) = ducking.time {
             if time.elapsed() > Duration::from_millis(750) {
