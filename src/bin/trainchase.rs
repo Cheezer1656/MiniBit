@@ -2,13 +2,13 @@
 
 use std::{
     net::{IpAddr, Ipv4Addr, SocketAddr},
-    sync::Arc,
+    sync::Arc, time::{Duration, Instant},
 };
 
 use valence::{
     entity::{
-        active_status_effects::{ActiveStatusEffect, ActiveStatusEffects}, entity::NoGravity, item::{ItemEntity, ItemEntityBundle, Stack}, player::{PlayerEntityBundle, PlayerModelParts}, sheep::SheepEntityBundle, Velocity
-    }, math::{IVec3, Vec3Swizzles}, player_list::{DisplayName, Listed, PlayerListEntryBundle}, prelude::*, protocol::{sound::SoundCategory, Sound}, spawn::IsFlat, status_effects::StatusEffect, CompressionThreshold, ServerSettings
+        entity::{self, NoGravity}, item::{ItemEntity, ItemEntityBundle, Stack}, player::{PlayerEntityBundle, PlayerModelParts}, Pose, Velocity
+    }, event_loop::PacketEvent, math::{IVec3, Vec3Swizzles}, player_list::{DisplayName, Listed, PlayerListEntryBundle}, prelude::*, protocol::{packets::play::HandSwingC2s, sound::SoundCategory, Sound}, spawn::IsFlat, CompressionThreshold, ServerSettings
 };
 
 const START_POS: DVec3 = DVec3::new(0.0, 100.0, 0.0);
@@ -21,9 +21,13 @@ const PUPPET_SPEED: f32 = 0.2;
 struct GameState {
     puppet: Entity,
     cop: Entity,
-    target: Entity,
     sneaking: bool,
     coins: u32,
+}
+
+#[derive(Component)]
+struct DuckingState {
+    time: Option<Instant>,
 }
 
 #[derive(Component)]
@@ -31,9 +35,6 @@ struct IsPuppet;
 
 #[derive(Component)]
 struct IsCop;
-
-#[derive(Component)]
-struct IsTarget;
 
 #[derive(Component)]
 struct Owner(Entity);
@@ -96,8 +97,8 @@ pub fn main() {
                 lock_look,
                 handle_movement,
                 apply_physics.after(handle_movement),
-                move_target,
                 check_for_coins,
+                stop_ducking,
                 despawn_disconnected_clients,
             ),
         )
@@ -151,7 +152,7 @@ fn init_clients(
             .id();
         commands
             .entity(puppet_entity_id)
-            .insert((IsPuppet, Owner(entity)));
+            .insert((IsPuppet, Owner(entity), DuckingState { time: None }));
         let mut puppet_props = Properties::default();
         puppet_props.set_skin("ewogICJ0aW1lc3RhbXAiIDogMTcyMDg5Mzk0ODQzMSwKICAicHJvZmlsZUlkIiA6ICI0OTY5YTVlZTYxMTY0MDBkYTM4YzhmZjRiMWJhZTZiZiIsCiAgInByb2ZpbGVOYW1lIiA6ICJSZWFjdFpJUCIsCiAgInNpZ25hdHVyZVJlcXVpcmVkIiA6IHRydWUsCiAgInRleHR1cmVzIiA6IHsKICAgICJTS0lOIiA6IHsKICAgICAgInVybCIgOiAiaHR0cDovL3RleHR1cmVzLm1pbmVjcmFmdC5uZXQvdGV4dHVyZS8yMzc4NzYzYzY3Mjg5MzllMWI0MDc5OWJjNDY5NWYxZDA4OGRjYzFkOWFhZDQxZWI4MDNjNzVkNDIwYmExZjk1IgogICAgfQogIH0KfQ==", "ax1Jq5CfbvonOQ2xP1wk2dyORpDavqhCvwrhdWblg7AvbthDlyNUHO6mWSSGMZwqHL+2A40DnUEcKsvMJhvjpP4QYUGowv0uCWPO8IemFXdrapZvprIi+TcBBP+FAI55cABR2SuanlBFs2azvT6wBdiBoASFCYr+7IZXhjVZct2siXprwXT0xEVDCw5Zy8mMc23iItDGxjzrNrA2/we6Hfapg+NUUu4xW2tm6SSkeSQi1Ox+TH9H4Z8rLUDv/4w1NB9bZuleS/X/HGHSs1BuS9XzCYuTmzkg9D1CtEVVFv0QgSw6Z7LdrOpls30iMaqbgJbhMUWF2L03gySiQlZEKzKw99SCxmLi9DopOfEBQzPQ2fHwyogjPA/BF7S0jbipZEYv5bcHi9hmjBeEJpRkQWaiJVGpg73btnzBZQHDES64wiNIQrNnKYgT77ClqG+3tfFvfBr44iEcwc+HJjMSZZRak1UsG5e7h7ki0JMV5klHacnvbEV06iW9y4RiO6v4hacMtBixCbVC0ZwGys1uQrSSoW1KJMZYNEW2qarePDGv2XHaJoCRXSnFxMmYPd1CH8q+N/hd5QBK/fXenhYodgYWwHxFhuV0WoI/43dtv7szoudNzm+6Q4piQtLdnl9VrGuLFZaSO0euephdp/Uqq+HnwRdd5Ve/wDqEaepZjsc=");
         commands.spawn(PlayerListEntryBundle {
@@ -192,20 +193,9 @@ fn init_clients(
             ..Default::default()
         });
 
-        let mut effects = ActiveStatusEffects::default();
-        effects.apply(ActiveStatusEffect::from_effect(StatusEffect::Invisibility).with_infinite());
-        let target_entity_id = commands.spawn(SheepEntityBundle {
-            layer: EntityLayerId(entity),
-            velocity: Velocity(Vec3::ZERO),
-            entity_no_gravity: NoGravity(true),
-            living_active_status_effects: effects,
-            ..Default::default()
-        }).insert((IsTarget, Owner(entity))).id();
-
         let state = GameState {
             puppet: puppet_entity_id,
             cop: cop_entity_id,
-            target: target_entity_id,
             sneaking: false,
             coins: 0,
         };
@@ -238,26 +228,34 @@ fn cleanup_clients(
 
 fn reset_clients(
     mut clients: Query<(&mut Client, &mut Position, &mut GameState, &mut ChunkLayer)>,
-    mut puppets: Query<(&mut Position, &mut Velocity, &Owner), (With<IsPuppet>, Without<Client>)>,
+    mut puppets: Query<(&mut Position, &mut Velocity, &DuckingState, &Owner), (With<IsPuppet>, Without<Client>)>,
     mut cops: Query<
         (&mut Position, &mut Velocity),
         (With<IsCop>, Without<Client>, Without<IsPuppet>),
     >,
 ) {
-    for (mut puppet_pos, mut puppet_vel, owner) in puppets.iter_mut() {
+    for (mut puppet_pos, mut puppet_vel, ducking, owner) in puppets.iter_mut() {
         if let Ok((mut client, mut pos, mut state, mut layer)) = clients.get_mut(owner.0) {
-            let block = layer.block(BlockPos::from(
+            let block1 = layer.block(BlockPos::from(
                 puppet_pos.0.floor() + DVec3::new(0.0, 1.0, 0.0),
             ));
-            let touched_block = if let Some(block) = block {
+            let touched_block1 = if let Some(block) = block1 {
+                block.state != BlockState::AIR && block.state != BlockState::RAIL
+            } else {
+                false
+            };
+            let block2 = layer.block(BlockPos::from(
+                puppet_pos.0.floor() + DVec3::new(0.0, 2.0, 0.0),
+            ));
+            let touched_block2 = if let Some(block) = block2 {
                 block.state != BlockState::AIR && block.state != BlockState::RAIL
             } else {
                 false
             };
             let out_of_bounds = puppet_pos.0.y < START_POS.y - 32_f64;
 
-            if out_of_bounds || touched_block || state.is_added() {
-                if touched_block && !state.is_added() {
+            if out_of_bounds || touched_block1 || (touched_block2 && ducking.time.is_none()) || state.is_added() {
+                if touched_block1 && !state.is_added() {
                     client.send_chat_message(
                         "You got ".italic()
                             + state
@@ -411,8 +409,14 @@ fn manage_blocks(
                                         block_pos + IVec3::new(0, 1, 0),
                                         BlockState::OAK_SIGN,
                                     );
-                                }
-                                3 => {
+                                },
+                                3..=4 => {
+                                    layer.set_block(
+                                        block_pos + IVec3::new(0, 2, 0),
+                                        BlockState::OAK_SIGN,
+                                    );
+                                },
+                                5 => {
                                     for i in 0..fastrand::u8(3..=5) {
                                         layer.set_block(
                                             block_pos + IVec3::new(0, 1, -(i as i32)),
@@ -463,20 +467,15 @@ fn lock_look(mut clients: Query<&mut Look, With<Client>>) {
 
 fn handle_interactions(
     clients: Query<&GameState>,
-    mut puppets: Query<&mut Velocity, With<IsPuppet>>,
-    mut interactions: EventReader<InteractEntityEvent>,
+    mut puppets: Query<(&mut DuckingState, &mut entity::Pose), With<IsPuppet>>,
+    mut packets: EventReader<PacketEvent>,  
 ) {
-    for event in interactions.read() {
-        if let Ok(state) = clients.get(event.client) {
-            if let Ok(mut vel) = puppets.get_mut(state.puppet) {
-                println!("{:?}", event.interact);
-                match event.interact {
-                    EntityInteraction::Attack => {
-                        if vel.0.y == 0.0 {
-                            vel.0.y += 0.5;
-                        }
-                    },
-                    _ => {}
+    for packet in packets.read() {
+        if let Some(_) = packet.decode::<HandSwingC2s>() {
+            if let Ok(state) = clients.get(packet.client) {
+                if let Ok((mut ducking, mut pose)) = puppets.get_mut(state.puppet) {
+                    pose.0 = Pose::Swimming;
+                    ducking.time = Some(Instant::now());
                 }
             }
         }
@@ -505,6 +504,9 @@ fn handle_movement(
                 ) * 2.0;
                 if vel.x != 0.0 {
                     puppet_vel.0.x = vel.x;
+                }
+                if vel.y > 0.1 && puppet_vel.0.y == 0.0 {
+                    puppet_vel.0.y = 0.5;
                 }
             }
 
@@ -559,17 +561,6 @@ fn apply_physics(
     }
 }
 
-fn move_target(
-    clients: Query<(&Position, &GameState), With<Client>>,
-    mut targets: Query<&mut Position, (With<IsTarget>, Without<Client>)>,
-) {
-    for (pos, state) in clients.iter() {
-        if let Ok(mut target_pos) = targets.get_mut(state.target) {
-            target_pos.0 = pos.0 + DVec3::new(0.0, 0.0, 2.0);
-        }
-    }
-}
-
 fn check_for_coins(
     mut clients: Query<(&mut Client, &mut GameState), With<Client>>,
     puppets: Query<(&Position, &Owner), With<IsPuppet>>,
@@ -591,6 +582,19 @@ fn check_for_coins(
                     state.coins += stack.0.count as u32;
                     commands.entity(entity).insert(Despawned);
                 }
+            }
+        }
+    }
+}
+
+fn stop_ducking(
+    mut puppets: Query<(&mut DuckingState, &mut entity::Pose), With<IsPuppet>>,
+) {
+    for (mut ducking, mut pose) in puppets.iter_mut() {
+        if let Some(time) = ducking.time {
+            if time.elapsed() > Duration::from_millis(750) {
+                pose.0 = Pose::Standing;
+                ducking.time = None;
             }
         }
     }
