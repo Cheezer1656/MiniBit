@@ -37,6 +37,10 @@ path = "src/bin/classic.rs"
 name = "trainchase"
 path = "src/bin/trainchase.rs"
 
+[[bin]]
+name = "spaceshooter"
+path = "src/bin/spaceshooter.rs"
+
 [profile.dev]
 opt-level = 1
 
