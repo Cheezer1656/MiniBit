@@ -13,6 +13,7 @@ const VIEW_DIST: u8 = 10;
 
 #[derive(Component, Default)]
 struct GameState {
+    blocks: Vec<Entity>,
     score: u32,
 }
 
@@ -129,17 +130,18 @@ fn init_clients(
     }
 }
 
-fn spawn_blocks(layers: Query<Entity, With<EntityLayer>>, mut commands: Commands) {
-    for layer in layers.iter() {
+fn spawn_blocks(mut clients: Query<(Entity, &mut GameState), With<EntityLayer>>, mut commands: Commands) {
+    for (layer, mut state) in clients.iter_mut() {
         if fastrand::u8(0..20) == 0 {
-            commands.spawn(FallingBlockEntityBundle {
+            let block_id = commands.spawn(FallingBlockEntityBundle {
                 position: Position(START_POS + DVec3::new(fastrand::f64() * 40.0 - 20.0, fastrand::f64() * 40.0 - 20.0, fastrand::f64() * 10.0 + 20.0)),
                 layer: EntityLayerId(layer),
                 object_data: ObjectData(14),
                 entity_no_gravity: NoGravity(true),
                 velocity: Velocity(Vec3::new(0.0, 0.0, fastrand::f32() * 0.5)),
                 ..Default::default()
-            });
+            }).id();
+            state.blocks.push(block_id);
         }
     }
 }
@@ -173,15 +175,22 @@ fn shoot(
                 let mut pos = player_pos.0 + DVec3::new(0.0, 1.6, 0.0);
                 for _ in 0..100 {
                     pos += direction;
-                    for (entity, block_pos, block_layer) in falling_blocks.iter() {
-                        client.play_particle(&Particle::Dust { rgb: Vec3::new(255.0, 0.0, 0.0), scale: 1.0 }, true, pos, Vec3::splat(0.001), 0.01, 2);
-                        if block_layer.0 == pkt.client && (block_pos.0 - pos).length() < 1.0 {
-                            client.play_sound(Sound::EntityArrowHitPlayer, SoundCategory::Master, player_pos.0, 1.0, 1.0);
-                            commands.entity(entity).insert(Despawned);
-                            state.score += 1;
-                            client.set_action_bar(&format!("Score: {}", state.score).color(Color::GREEN).bold());
-                            break;
+                    client.play_particle(&Particle::Dust { rgb: Vec3::new(255.0, 0.0, 0.0), scale: 1.0 }, true, pos, Vec3::splat(0.001), 0.01, 2);
+                    let mut hit_blocks: Vec<usize> = Vec::new();
+                    for (i, entity) in state.blocks.iter().enumerate() {
+                        if let Ok((entity, block_pos, block_layer)) = falling_blocks.get(*entity) {
+                            if block_layer.0 == pkt.client && (block_pos.0 - pos).length() < 1.0 {
+                                client.play_sound(Sound::EntityArrowHitPlayer, SoundCategory::Master, player_pos.0, 1.0, 1.0);
+                                commands.entity(entity).insert(Despawned);
+                                hit_blocks.push(i);
+                                state.score += 1;
+                                client.set_action_bar(&format!("Score: {}", state.score).color(Color::GREEN).bold());
+                                break;
+                            }
                         }
+                    }
+                    for i in hit_blocks.iter() {
+                        state.blocks.remove(*i);
                     }
                 }
             }
