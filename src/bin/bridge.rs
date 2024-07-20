@@ -4,9 +4,10 @@
 mod lib;
 
 use bevy_ecs::query::WorldQuery;
-use lib::duels::{CombatState, DuelsPlugin, EndGameEvent, Entities, PlayerGameState, StartGameEvent};
+use lib::duels::{
+    CombatState, DuelsConfig, DuelsPlugin, EndGameEvent, Entities, GameStageEvent, MapIndex, PlayerGameState
+};
 use valence::entity::living::Health;
-use valence::entity::Velocity;
 use valence::entity::{EntityId, EntityStatuses};
 use valence::math::Vec3Swizzles;
 use valence::prelude::*;
@@ -16,25 +17,52 @@ use valence::protocol::Sound;
 use valence::protocol::VarInt;
 use valence::protocol::WritePacket;
 
+#[derive(Event)]
+struct DeathEvent(Entity);
+
 fn main() {
     App::new()
-        .add_plugins(DuelsPlugin { default_gamemode: GameMode::Adventure })
+        .add_plugins(DuelsPlugin {
+            default_gamemode: GameMode::Survival,
+        })
         .add_plugins(DefaultPlugins)
+        .add_event::<DeathEvent>()
         .add_systems(EventLoopUpdate, handle_combat_events)
-        .add_systems(Update, (start_game, end_game, handle_oob_clients))
+        .add_systems(
+            Update,
+            (handle_death, handle_oob_clients, gamestage_change, end_game),
+        )
         .run();
 }
 
-fn start_game(
-    mut clients: Query<&mut Inventory>,
+fn fill_inventory(inv: &mut Inventory, team: u8) {
+    let block_type = match team {
+        0 => ItemKind::BlueTerracotta,
+        1 => ItemKind::RedTerracotta,
+        _ => ItemKind::Terracotta,
+    };
+    inv.set_slot(36, ItemStack::new(ItemKind::IronSword, 1, None));
+    inv.set_slot(37, ItemStack::new(ItemKind::Bow, 1, None));
+    inv.set_slot(38, ItemStack::new(ItemKind::DiamondPickaxe, 1, None));
+    inv.set_slot(39, ItemStack::new(block_type, 64, None));
+    inv.set_slot(40, ItemStack::new(block_type, 64, None));
+    inv.set_slot(41, ItemStack::new(ItemKind::GoldenApple, 8, None));
+    inv.set_slot(44, ItemStack::new(ItemKind::Arrow, 10, None));
+}
+
+fn gamestage_change(
+    mut clients: Query<(&mut Inventory, &PlayerGameState), With<Client>>,
     games: Query<&Entities>,
-    mut start_game: EventReader<StartGameEvent>,
+    mut event: EventReader<GameStageEvent>,
 ) {
-    for event in start_game.read() {
-        if let Ok(entities) = games.get(event.0) {
+    for event in event.read() {
+        if event.stage != 4 {
+            continue;
+        }
+        if let Ok(entities) = games.get(event.game_id) {
             for entity in entities.0.iter() {
-                if let Ok(mut inv) = clients.get_mut(*entity) {
-                    inv.set_slot(36, ItemStack::new(ItemKind::IronSword, 1, None));
+                if let Ok((mut inventory, gamestate)) = clients.get_mut(*entity) {
+                    fill_inventory(&mut inventory, gamestate.team);
                 }
             }
         }
@@ -42,12 +70,12 @@ fn start_game(
 }
 
 fn end_game(
-    mut clients: Query<&mut Inventory>,
+    mut clients: Query<&mut Inventory, With<Client>>,
     games: Query<&Entities>,
-    mut start_game: EventReader<StartGameEvent>,
+    mut end_game: EventReader<EndGameEvent>,
 ) {
-    for event in start_game.read() {
-        if let Ok(entities) = games.get(event.0) {
+    for event in end_game.read() {
+        if let Ok(entities) = games.get(event.game_id) {
             for entity in entities.0.iter() {
                 if let Ok(mut inv) = clients.get_mut(*entity) {
                     for slot in 0..inv.slot_count() {
@@ -65,8 +93,6 @@ struct CombatQuery {
     client: &'static mut Client,
     id: &'static EntityId,
     pos: &'static Position,
-    vel: &'static mut Velocity,
-    health: &'static mut Health,
     state: &'static mut CombatState,
     statuses: &'static mut EntityStatuses,
     gamestate: &'static PlayerGameState,
@@ -77,7 +103,6 @@ fn handle_combat_events(
     mut clients: Query<CombatQuery>,
     mut sprinting: EventReader<SprintEvent>,
     mut interact_entity: EventReader<InteractEntityEvent>,
-    mut end_game: EventWriter<EndGameEvent>,
 ) {
     for &SprintEvent { client, state } in sprinting.read() {
         if let Ok(mut client) = clients.get_mut(client) {
@@ -126,16 +151,6 @@ fn handle_combat_events(
             .client
             .set_velocity([dir.x * knockback_xz, knockback_y, dir.y * knockback_xz]);
 
-        let damage = 5.83;
-        if victim.health.0 > damage {
-            victim.health.0 -= damage;
-        } else {
-            end_game.send(EndGameEvent {
-                game_id: victim.gamestate.game_id.unwrap(),
-                loser: victim.gamestate.team,
-            });
-        }
-
         attacker.state.has_bonus_knockback = false;
 
         victim.client.play_sound(
@@ -164,16 +179,39 @@ fn handle_combat_events(
 }
 
 fn handle_oob_clients(
-    positions: Query<(&Position, &PlayerGameState), With<Client>>,
-    mut end_game: EventWriter<EndGameEvent>,
+    positions: Query<(Entity, &Position, &PlayerGameState), With<Client>>,
+    mut deaths: EventWriter<DeathEvent>,
 ) {
-    for (pos, gamestate) in positions.iter() {
+    for (entity, pos, gamestate) in positions.iter() {
         if pos.0.y < 0.0 {
             if gamestate.game_id.is_some() {
-                end_game.send(EndGameEvent {
-                    game_id: gamestate.game_id.unwrap(),
-                    loser: gamestate.team,
-                });
+                deaths.send(DeathEvent(entity));
+            }
+        }
+    }
+}
+
+fn handle_death(
+    mut clients: Query<(&mut Position, &mut Look, &mut HeadYaw, &mut Health, &mut Inventory, &PlayerGameState), With<Client>>,
+    games: Query<&MapIndex>,
+    mut deaths: EventReader<DeathEvent>,
+    config: Res<DuelsConfig>,
+) {
+    for DeathEvent(entity) in deaths.read() {
+        if let Ok((mut pos, mut look, mut head_yaw, mut health, mut inventory, gamestate)) = clients.get_mut(*entity) {
+            if let Some(game_id) = gamestate.game_id {
+                if let Ok(map_index) = games.get(game_id) {
+                    let spawn = &config.worlds[map_index.0].spawns[gamestate.team as usize];
+                    pos.0 = spawn.pos.into();
+                    look.yaw = spawn.rot[0];
+                    look.pitch = spawn.rot[1];
+                    head_yaw.0 = spawn.rot[0];
+                    health.0 = 20.0;
+                    for slot in 0..inventory.slot_count() {
+                        inventory.set_slot(slot, ItemStack::EMPTY);
+                    }
+                    fill_inventory(&mut inventory, gamestate.team);
+                }
             }
         }
     }

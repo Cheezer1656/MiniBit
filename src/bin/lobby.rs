@@ -1,26 +1,21 @@
 #![allow(clippy::type_complexity)]
 
+#[path = "../lib/mod.rs"]
+mod lib;
+
 use std::{
-    net::{IpAddr, Ipv4Addr, SocketAddr},
-    path::{Path, PathBuf},
-    sync::Arc,
+    marker::PhantomData,
     time::{Duration, SystemTime},
 };
 
+use lib::config::{ConfigLoaderPlugin, WorldValue};
+use serde::Deserialize;
 use valence::{
-    entity::{living::Health, player::PlayerEntityBundle},
-    event_loop::PacketEvent,
-    inventory::{ClickSlotEvent, HeldItem},
-    message::{ChatMessageEvent, SendMessage},
-    nbt::compound,
-    player_list::{DisplayName, Listed, PlayerListEntryBundle},
-    prelude::*,
-    protocol::{packets::play::PlayerInteractItemC2s, sound::SoundCategory, Sound},
-    CompressionThreshold, ServerSettings,
+    entity::{living::Health, player::PlayerEntityBundle}, event_loop::PacketEvent, inventory::{ClickSlotEvent, HeldItem}, message::{ChatMessageEvent, SendMessage}, nbt::compound, player_list::{DisplayName, Listed, PlayerListEntryBundle}, prelude::*, protocol::{packets::play::PlayerInteractItemC2s, sound::SoundCategory, Sound}
 };
 use valence_anvil::AnvilLevel;
 
-#[derive(Clone)]
+#[derive(Deserialize, Clone)]
 enum ActionType {
     Message,
     Warp,
@@ -40,35 +35,29 @@ struct NpcAction {
     args: Vec<String>,
 }
 
-#[derive(Component, Clone)]
-struct NpcName(String);
-#[derive(Component, Clone)]
-struct SkinValue(String);
-#[derive(Component, Clone)]
-struct SkinSignature(String);
-
-#[derive(Bundle, Clone)]
-struct NpcConfig {
-    uuid: UniqueId,
-    name: NpcName,
-    position: Position,
-    yaw: HeadYaw,
-    skin: SkinValue,
-    signature: SkinSignature,
-    command: NpcAction,
+#[derive(Deserialize)]
+struct NpcValue {
+    name: String,
+    pos: [f64; 3],
+    yaw: f32,
+    pitch: f32,
+    skin: String,
+    signature: String,
+    command: ActionType,
+    args: Vec<String>,
 }
 
+#[derive(Deserialize)]
 struct ParkourConfig {
     name: String,
-    start: DVec3,
-    end: DVec3,
+    start: [f64; 3],
+    end: [f64; 3],
 }
 
-#[derive(Resource)]
-struct ServerConfig {
-    world_path: PathBuf,
-    spawn_pos: DVec3,
-    npcs: Vec<NpcConfig>,
+#[derive(Resource, Deserialize)]
+struct LobbyConfig {
+    world: WorldValue,
+    npcs: Vec<NpcValue>,
     parkour: Vec<ParkourConfig>,
 }
 
@@ -84,127 +73,12 @@ struct ParkourStatus {
     end: DVec3,
 }
 
-pub fn main() {
-    let Ok(config) = std::fs::read_to_string("config.json") else {
-        eprintln!("Failed to read `config.json`. Exiting.");
-        return;
-    };
-    let Ok(config) = json::parse(&config) else {
-        eprintln!("Failed to parse `config.json`. Exiting.");
-        return;
-    };
-
-    if config["server"].is_null() || config["world"].is_null() {
-        eprintln!("`server` or `world` key is missing in `config.json`. Exiting.");
-        return;
-    }
-
-    let world_path: PathBuf = match config["world"]["path"].as_str() {
-        Some(dir) => Path::new(dir).to_path_buf(),
-        None => {
-            eprintln!("`path` key is missing in `world` object in `config.json`. Exiting.");
-            return;
-        }
-    };
-
-    if !world_path.exists() {
-        eprintln!(
-            "Directory `{}` does not exist. Exiting.",
-            world_path.display()
-        );
-        return;
-    }
-
-    if !world_path.is_dir() {
-        eprintln!("`{}` is not a directory. Exiting.", world_path.display());
-        return;
-    }
-
-    let spawn_pos = config["world"]["spawn"]
-        .members()
-        .map(|v| v.as_f64().unwrap_or(0.0))
-        .collect::<Vec<f64>>();
-
-    let server_config = ServerConfig {
-        world_path,
-        spawn_pos: DVec3::new(spawn_pos[0], spawn_pos[1], spawn_pos[2]),
-        npcs: config["npcs"]
-            .members()
-            .map(|npc| NpcConfig {
-                uuid: UniqueId::default(),
-                name: NpcName(npc["name"].as_str().unwrap_or("Steve").to_string()),
-                position: Position::new(DVec3::new(
-                    npc["position"][0].as_f64().unwrap_or(0.0),
-                    npc["position"][1].as_f64().unwrap_or(0.0),
-                    npc["position"][2].as_f64().unwrap_or(0.0),
-                )),
-                yaw: HeadYaw(npc["yaw"].as_f32().unwrap_or(0.0)),
-                skin: SkinValue(npc["skin"].as_str().unwrap_or("").to_string()),
-                signature: SkinSignature(npc["signature"].as_str().unwrap_or("").to_string()),
-                command: NpcAction {
-                    command: match npc["command"][0].as_str().unwrap_or("") {
-                        "message" => ActionType::Message,
-                        "warp" => ActionType::Warp,
-                        _ => ActionType::None,
-                    },
-                    args: npc["command"]
-                        .members()
-                        .skip(1)
-                        .map(|v| v.as_str().unwrap_or("").to_string())
-                        .collect(),
-                },
-            })
-            .collect(),
-        parkour: config["parkour"]
-            .members()
-            .map(|parkour| ParkourConfig {
-                name: parkour["name"].as_str().unwrap_or("Parkour").to_string(),
-                start: DVec3::new(
-                    parkour["start"][0].as_f64().unwrap(),
-                    parkour["start"][1].as_f64().unwrap(),
-                    parkour["start"][2].as_f64().unwrap(),
-                ),
-                end: DVec3::new(
-                    parkour["end"][0].as_f64().unwrap(),
-                    parkour["end"][1].as_f64().unwrap(),
-                    parkour["end"][2].as_f64().unwrap(),
-                ),
-            })
-            .collect(),
-    };
-
+fn main() {
     App::new()
-        .insert_resource(NetworkSettings {
-            address: SocketAddr::new(
-                config["server"]["ip"]
-                    .as_str()
-                    .unwrap_or("0.0.0.0")
-                    .parse()
-                    .unwrap_or(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0))),
-                config["server"]["port"].as_u16().unwrap_or(25565),
-            ),
-            max_players: config["server"]["max_players"].as_usize().unwrap_or(20),
-            max_connections: config["server"]["max_players"].as_usize().unwrap_or(20),
-            connection_mode: match config["server"]["connection_mode"].as_u8().unwrap_or(0) {
-                1 => ConnectionMode::Offline,
-                2 => ConnectionMode::BungeeCord,
-                3 => ConnectionMode::Velocity {
-                    secret: Arc::from(config["server"]["secret"].as_str().unwrap_or("")),
-                },
-                _ => ConnectionMode::Online {
-                    prevent_proxy_connections: config["server"]["prevent_proxy_connections"]
-                        .as_bool()
-                        .unwrap_or(true),
-                },
-            },
-            ..Default::default()
-        })
-        .insert_resource(ServerSettings {
-            compression_threshold: CompressionThreshold(-1),
-            ..Default::default()
+        .add_plugins(ConfigLoaderPlugin::<LobbyConfig> {
+            phantom: PhantomData,
         })
         .add_plugins(DefaultPlugins)
-        .insert_resource(server_config)
         .insert_resource(ServerGlobals {
             navigator_gui: None,
         })
@@ -221,7 +95,6 @@ pub fn main() {
                 chat_message,
                 start_parkour,
                 manage_parkour,
-                apply_custom_skin,
                 execute_action,
             ),
         )
@@ -233,14 +106,14 @@ fn setup(
     dimensions: Res<DimensionTypeRegistry>,
     biomes: Res<BiomeRegistry>,
     server: Res<Server>,
-    config: Res<ServerConfig>,
+    config: Res<LobbyConfig>,
     mut globals: ResMut<ServerGlobals>,
 ) {
     let layer = LayerBundle::new(ident!("overworld"), &dimensions, &biomes, &server);
-    let mut level = AnvilLevel::new(&config.world_path, &biomes);
+    let mut level = AnvilLevel::new(&config.world.path, &biomes);
 
-    for z in -3..3 {
-        for x in -3..3 {
+    for z in config.world.z_chunks[0]..=config.world.z_chunks[1] {
+        for x in config.world.x_chunks[0]..=config.world.x_chunks[1] {
             let pos = ChunkPos::new(x, z);
 
             level.ignored_chunks.insert(pos);
@@ -251,24 +124,30 @@ fn setup(
     let layer_id = commands.spawn((layer, level)).id();
 
     for npc in &config.npcs {
-        let npc_entity = commands
-            .spawn(PlayerEntityBundle {
-                layer: EntityLayerId(layer_id),
-                uuid: npc.uuid,
-                position: Position::new(npc.position.get()),
-                look: Look::new(180.0, 0.0),
-                head_yaw: npc.yaw,
-                ..PlayerEntityBundle::default()
-            })
-            .id();
+        let npc_id = UniqueId(Uuid::default());
 
-        commands.entity(npc_entity).insert(npc.clone());
+        commands.spawn(PlayerEntityBundle {
+            layer: EntityLayerId(layer_id),
+            uuid: npc_id,
+            position: Position::new(npc.pos),
+            look: Look::new(npc.yaw, npc.pitch),
+            head_yaw: HeadYaw(npc.yaw),
+            ..PlayerEntityBundle::default()
+        }).insert(NpcAction {
+            command: npc.command.clone(),
+            args: npc.args.clone(),
+        });
+
+        let mut props = Properties::default();
+        props.set_skin(npc.skin.clone(), npc.signature.clone());
+        println!("{:?}", props);
 
         commands.spawn(PlayerListEntryBundle {
-            uuid: npc.uuid,
-            username: Username(npc.name.0.to_string()),
-            display_name: DisplayName(npc.name.0.clone().color(Color::RED).into()),
+            uuid: npc_id,
+            username: Username(npc.name.clone()),
+            display_name: DisplayName(Some(npc.name.clone().color(Color::RED))),
             listed: Listed(false),
+            properties: props,
             ..Default::default()
         });
     }
@@ -283,7 +162,7 @@ fn setup(
                 1,
                 Some(compound! {
                     "display" => compound! {
-                        "Name" => format!("{{\"text\":\"{}\",\"italic\":false}}", npc.name.0)
+                        "Name" => format!("{{\"text\":\"{}\",\"italic\":false}}", npc.name)
                     },
                 }),
             ),
@@ -306,7 +185,7 @@ fn init_clients(
         Added<Client>,
     >,
     layers: Query<Entity, With<ChunkLayer>>,
-    config: Res<ServerConfig>,
+    config: Res<LobbyConfig>,
 ) {
     for (
         mut layer_id,
@@ -323,7 +202,7 @@ fn init_clients(
         layer_id.0 = layer;
         visible_chunk_layer.0 = layer;
         visible_entity_layers.0.insert(layer);
-        pos.set(config.spawn_pos);
+        pos.set(config.world.spawns[0].pos);
         *game_mode = GameMode::Adventure;
         health.0 = 20.0;
 
@@ -345,12 +224,12 @@ fn init_clients(
 fn manage_players(
     mut clients: Query<(&mut Client, &mut Position, &HeadYaw), With<Client>>,
     mut layers: Query<&mut ChunkLayer>,
-    config: Res<ServerConfig>,
+    config: Res<LobbyConfig>,
 ) {
     let layer = layers.single_mut();
     for (mut client, mut pos, yaw) in clients.iter_mut() {
         if pos.0.y < 0.0 {
-            pos.set([config.spawn_pos.x, config.spawn_pos.y, config.spawn_pos.z]);
+            pos.set(config.world.spawns[0].pos);
         }
         let Some(block) = layer.block(BlockPos::new(
             pos.0.x.floor() as i32,
@@ -430,15 +309,15 @@ fn handle_slot_click(
     clients: Query<&OpenInventory, With<Client>>,
     mut action_event: EventWriter<ActionEvent>,
     mut click_slot: EventReader<ClickSlotEvent>,
-    config: Res<ServerConfig>,
+    config: Res<LobbyConfig>,
 ) {
     for event in click_slot.read() {
         if let Ok(_open_inv) = clients.get(event.client) {
             if event.window_id != 0 && (event.slot_id as usize) < config.npcs.len() {
                 action_event.send(ActionEvent {
                     entity: event.client,
-                    action: config.npcs[event.slot_id as usize].command.command.clone(),
-                    args: config.npcs[event.slot_id as usize].command.args.clone(),
+                    action: config.npcs[event.slot_id as usize].command.clone(),
+                    args: config.npcs[event.slot_id as usize].args.clone(),
                 })
             }
         }
@@ -466,11 +345,11 @@ fn chat_message(
 fn start_parkour(
     mut query: Query<(Entity, &mut Client, &mut Inventory, &Position), Without<ParkourStatus>>,
     mut commands: Commands,
-    config: Res<ServerConfig>,
+    config: Res<LobbyConfig>,
 ) {
     for (entity, mut client, mut inv, pos) in query.iter_mut() {
         for parkour in &config.parkour {
-            if pos.0.floor() == parkour.start {
+            if pos.0.floor() == parkour.start.into() {
                 client.send_chat_message(
                     (String::new() + &parkour.name + " started!")
                         .into_text()
@@ -480,7 +359,7 @@ fn start_parkour(
                 commands.entity(entity).insert(ParkourStatus {
                     name: parkour.name.clone(),
                     start: SystemTime::now(),
-                    end: parkour.end,
+                    end: parkour.end.into(),
                 });
                 inv.set_slot(
                     44,
@@ -522,18 +401,6 @@ fn manage_parkour(
             );
             commands.entity(entity).remove::<ParkourStatus>();
         }
-    }
-}
-
-fn apply_custom_skin(
-    // This function is not working (SkinValue and SkinSignature are not found in the query)
-    mut query: Query<
-        (&SkinValue, &SkinSignature, &mut Properties),
-        (Added<Properties>, Without<Client>),
-    >,
-) {
-    for (skin, sign, mut props) in query.iter_mut() {
-        props.set_skin(skin.0.clone(), sign.0.clone());
     }
 }
 

@@ -5,7 +5,8 @@ edition = "2021"
 
 [dependencies]
 fastrand = "2.1.0"
-json = "0.12.4"
+serde = "1.0.204"
+serde_json = "1.0.120"
 valence = { git = "https://github.com/Cheezer1656/valence", branch = "custom" }
 valence_anvil = { git = "https://github.com/Cheezer1656/valence", branch = "custom" }
 
@@ -32,6 +33,10 @@ path = "src/bin/bowfight.rs"
 [[bin]]
 name = "classic"
 path = "src/bin/classic.rs"
+
+[[bin]]
+name = "bridge"
+path = "src/bin/bridge.rs"
 
 [[bin]]
 name = "trainchase"

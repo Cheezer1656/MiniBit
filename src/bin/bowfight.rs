@@ -4,8 +4,7 @@
 mod lib;
 
 use bevy_ecs::query::WorldQuery;
-use lib::config::*;
-use lib::game::*;
+use lib::duels::*;
 use valence::entity::arrow::ArrowEntity;
 use valence::entity::arrow::ArrowEntityBundle;
 use valence::entity::living::Health;
@@ -25,26 +24,24 @@ use valence::protocol::WritePacket;
 #[derive(Component)]
 struct ProjectileOwner(EntityId);
 
-pub fn main() {
-    match register_defaults(&mut App::new()) {
-        Ok(app) => {
-            app.add_systems(
-                EventLoopUpdate,
-                (handle_combat_events, handle_player_action),
-            )
-            .add_systems(
-                Update,
-                (
-                    gamestage_change.after(gameloop),
-                    end_game.after(lib::game::end_game),
-                    handle_arrow_physics,
-                    handle_oob_clients,
-                ),
-            )
-            .run();
-        }
-        Err(e) => eprintln!("{}", e),
-    }
+fn main() {
+    App::new()
+        .add_plugins(DuelsPlugin { default_gamemode: GameMode::Adventure })
+        .add_plugins(DefaultPlugins)
+        .add_systems(
+            EventLoopUpdate,
+            (handle_combat_events, handle_player_action),
+        )
+        .add_systems(
+            Update,
+            (
+                gamestage_change.after(lib::duels::gameloop),
+                end_game.after(lib::duels::end_game),
+                handle_arrow_physics,
+                handle_oob_clients,
+            ),
+        )
+        .run();
 }
 
 fn gamestage_change(

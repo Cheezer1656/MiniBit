@@ -4,26 +4,22 @@
 mod lib;
 
 use bevy_ecs::query::WorldQuery;
-use lib::config::*;
-use lib::game::*;
+use lib::duels::{CombatState, DuelsPlugin, EndGameEvent, PlayerGameState};
 use valence::entity::{EntityId, EntityStatuses};
 use valence::math::Vec3Swizzles;
 use valence::prelude::*;
 use valence::protocol::packets::play::DamageTiltS2c;
 use valence::protocol::sound::SoundCategory;
-use valence::protocol::Sound;
+use valence::protocol::{Sound, WritePacket};
 use valence::protocol::VarInt;
-use valence::protocol::WritePacket;
 
-pub fn main() {
-    match register_defaults(&mut App::new()) {
-        Ok(app) => {
-            app.add_systems(EventLoopUpdate, handle_combat_events)
-                .add_systems(Update, (handle_oob_clients,))
-                .run();
-        }
-        Err(e) => eprintln!("{}", e),
-    }
+fn main() {
+    App::new()
+        .add_plugins(DuelsPlugin { default_gamemode: GameMode::Adventure })
+        .add_plugins(DefaultPlugins)
+        .add_systems(EventLoopUpdate, handle_combat_events)
+        .add_systems(Update, handle_oob_clients)
+        .run();
 }
 
 #[derive(WorldQuery)]

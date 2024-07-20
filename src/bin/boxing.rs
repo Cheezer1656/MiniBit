@@ -4,8 +4,7 @@
 mod lib;
 
 use bevy_ecs::query::WorldQuery;
-use lib::config::*;
-use lib::game::*;
+use lib::duels::{CombatState, DuelsPlugin, EndGameEvent, Entities, PlayerGameState};
 use valence::entity::{EntityId, EntityStatuses};
 use valence::math::Vec3Swizzles;
 use valence::prelude::*;
@@ -20,22 +19,20 @@ struct BoxingState {
     hits: u8,
 }
 
-pub fn main() {
-    match register_defaults(&mut App::new()) {
-        Ok(app) => {
-            app.add_systems(EventLoopUpdate, handle_combat_events)
-                .add_systems(
-                    Update,
-                    (
-                        init_clients.after(lib::game::init_clients),
-                        handle_oob_clients,
-                        end_game.after(lib::game::end_game),
-                    ),
-                )
-                .run();
-        }
-        Err(e) => eprintln!("{}", e),
-    }
+fn main() {
+    App::new()
+        .add_plugins(DuelsPlugin { default_gamemode: GameMode::Adventure })
+        .add_plugins(DefaultPlugins)
+        .add_systems(EventLoopUpdate, handle_combat_events)
+        .add_systems(
+            Update,
+            (
+                init_clients.after(lib::duels::init_clients),
+                handle_oob_clients,
+                end_game.after(lib::duels::end_game),
+            ),
+        )
+        .run();
 }
 
 fn init_clients(clients: Query<Entity, Added<Client>>, mut commands: Commands) {

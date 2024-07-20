@@ -1,14 +1,17 @@
-use crate::{load_config, ServerConfig};
+#![allow(dead_code)]
+
 use bevy_ecs::query::WorldQuery;
-use std::time::SystemTime;
+use serde::Deserialize;
+use std::{marker::PhantomData, time::SystemTime};
 use valence::{
     entity::living::Health,
     message::ChatMessageEvent,
     prelude::*,
     protocol::{sound::SoundCategory, Sound},
-    CompressionThreshold, ServerSettings,
 };
 use valence_anvil::AnvilLevel;
+
+use super::config::{ConfigLoaderPlugin, WorldValue};
 
 #[derive(Component)]
 pub struct MapIndex(pub usize);
@@ -65,39 +68,43 @@ pub struct ServerGlobals {
     pub queue: Vec<Entity>,
 }
 
-pub fn register_defaults(app: &mut App) -> Result<&mut App, &'static str> {
-    let config = match load_config() {
-        Ok(config) => config,
-        Err(e) => {
-            return Err(e);
-        }
-    };
+#[derive(Resource)]
+pub struct GameSettings {
+    pub default_gamemode: GameMode,
+}
 
-    return Ok(app
-        .insert_resource(config.0)
-        .insert_resource(ServerSettings {
-            compression_threshold: CompressionThreshold(-1),
-            ..Default::default()
-        })
-        .add_plugins(DefaultPlugins)
-        .insert_resource(config.1)
-        .add_event::<StartGameEvent>()
-        .add_event::<EndGameEvent>()
-        .add_event::<GameStageEvent>()
-        .add_systems(Startup, setup)
-        .add_systems(
-            Update,
-            (
-                init_clients,
-                despawn_disconnected_clients,
-                start_game.after(init_clients),
-                end_game,
-                gameloop.after(start_game),
-                gamestage_change.after(gameloop),
-                chat_message,
-            ),
-        )
-        .add_systems(PostUpdate, (handle_disconnect, check_queue)));
+#[derive(Resource, Deserialize)]
+pub struct DuelsConfig {
+    pub worlds: Vec<WorldValue>,
+    pub other: Option<Vec<f64>>,
+}
+
+pub struct DuelsPlugin {
+    pub default_gamemode: GameMode,
+}
+
+impl Plugin for DuelsPlugin {
+    fn build(&self, app: &mut App) {
+        app.add_plugins(ConfigLoaderPlugin::<DuelsConfig> { phantom: PhantomData })
+            .insert_resource(GameSettings { default_gamemode: self.default_gamemode })
+            .add_event::<StartGameEvent>()
+            .add_event::<EndGameEvent>()
+            .add_event::<GameStageEvent>()
+            .add_systems(Startup, setup)
+            .add_systems(
+                Update,
+                (
+                    init_clients,
+                    despawn_disconnected_clients,
+                    start_game.after(init_clients),
+                    end_game,
+                    gameloop.after(start_game),
+                    gamestage_change.after(gameloop),
+                    chat_message,
+                ),
+            )
+            .add_systems(PostUpdate, (handle_disconnect, check_queue));
+    }
 }
 
 pub fn setup(
@@ -105,15 +112,15 @@ pub fn setup(
     server: Res<Server>,
     dimensions: Res<DimensionTypeRegistry>,
     biomes: Res<BiomeRegistry>,
-    config: Res<ServerConfig>,
+    config: Res<DuelsConfig>,
 ) {
     let mut layers: Vec<Entity> = Vec::new();
-    for world_path in config.world_paths.iter() {
+    for world in config.worlds.iter() {
         let layer = LayerBundle::new(ident!("overworld"), &dimensions, &biomes, &server);
-        let mut level = AnvilLevel::new(world_path, &biomes);
+        let mut level = AnvilLevel::new(world.path.clone(), &biomes);
 
-        for z in -1..1 {
-            for x in -1..1 {
+        for z in world.z_chunks[0]..=world.z_chunks[1] {
+            for x in world.x_chunks[0]..=world.x_chunks[1] {
                 let pos = ChunkPos::new(x, z);
 
                 level.ignored_chunks.insert(pos);
@@ -146,7 +153,8 @@ pub fn init_clients(
     layers: Query<Entity, (With<ChunkLayer>, With<EntityLayer>)>,
     mut commands: Commands,
     mut globals: ResMut<ServerGlobals>,
-    config: Res<ServerConfig>,
+    settings: Res<GameSettings>,
+    config: Res<DuelsConfig>,
 ) {
     for (
         entity,
@@ -165,8 +173,8 @@ pub fn init_clients(
         layer_id.0 = layer;
         visible_chunk_layer.0 = layer;
         visible_entity_layers.0.insert(layer);
-        pos.set(config.spawns[0][0]);
-        *game_mode = GameMode::Adventure;
+        pos.set(config.worlds[0].spawns[0].pos);
+        *game_mode = settings.default_gamemode;
         health.0 = 20.0;
         commands
             .entity(entity)
@@ -235,13 +243,15 @@ pub fn start_game(
         &mut VisibleChunkLayer,
         &mut VisibleEntityLayers,
         &mut Position,
+        &mut Look,
+        &mut HeadYaw,
     )>,
     mut games: Query<(&mut MapIndex, &EntityLayerId, &Entities), Without<Client>>,
     chunklayers: Query<Entity, With<ChunkLayer>>,
     entitylayers: Query<Entity, With<EntityLayer>>,
     mut start_game: EventReader<StartGameEvent>,
     globals: Res<ServerGlobals>,
-    config: Res<ServerConfig>,
+    config: Res<DuelsConfig>,
 ) {
     for event in start_game.read() {
         if let Ok((mut map, game_layer, entities)) = games.get_mut(event.0) {
@@ -256,6 +266,8 @@ pub fn start_game(
                     mut visible_chunk_layer,
                     mut visible_entity_layers,
                     mut pos,
+                    mut look,
+                    mut headyaw,
                 )) = clients.get_mut(*entity)
                 else {
                     continue;
@@ -277,7 +289,11 @@ pub fn start_game(
                 gamestate.game_id = Some(event.0);
                 gamestate.team = i as u8;
 
-                pos.set(config.spawns[map_idx][gamestate.team as usize]);
+                let spawn = &config.worlds[map_idx].spawns[gamestate.team as usize];
+                pos.set(spawn.pos);
+                look.yaw = spawn.rot[0];
+                look.pitch = spawn.rot[1];
+                headyaw.0 = spawn.rot[0];
 
                 client.send_chat_message("Game started!");
             }
@@ -299,7 +315,7 @@ pub fn end_game(
     mut end_game: EventReader<EndGameEvent>,
     mut commands: Commands,
     mut globals: ResMut<ServerGlobals>,
-    config: Res<ServerConfig>,
+    config: Res<DuelsConfig>,
 ) {
     for event in end_game.read() {
         let Ok((game_layer, entities)) = games.get(event.game_id) else {
@@ -322,7 +338,7 @@ pub fn end_game(
             visible_chunk_layer.0 = globals.map_layers[0];
             visible_entity_layers.0.clear();
             visible_entity_layers.0.insert(globals.map_layers[0]);
-            pos.set(config.spawns[0][0]);
+            pos.set(config.worlds[0].spawns[0].pos);
             health.0 = 20.0;
 
             if gamestate.team == event.loser {
@@ -355,95 +371,28 @@ pub struct GameQuery {
 
 pub fn gameloop(
     mut clients: Query<GameQuery>,
-    mut games: Query<(Entity, &MapIndex, &mut GameStage, &GameTime)>,
+    mut games: Query<(Entity, &Entities, &MapIndex, &mut GameStage, &GameTime)>,
     mut gamestage: EventWriter<GameStageEvent>,
-    config: Res<ServerConfig>,
+    config: Res<DuelsConfig>,
 ) {
-    for (game_id, map, mut stage, time) in games.iter_mut() {
+    for (game_id, entities, map, mut stage, time) in games.iter_mut() {
         if stage.0 < 4 {
-            for mut player in clients.iter_mut() {
-                if player.gamestate.game_id == Some(game_id) {
-                    if player.gamestate.team == 0 {
-                        player.yaw.0 = 180.0;
-                        player.look.yaw = 180.0;
-                        player.look.pitch = 0.0;
-                    } else {
-                        player.yaw.0 = 0.0;
-                        player.look.yaw = 0.0;
-                        player.look.pitch = 0.0;
-                    }
-                    player.pos.set(config.spawns[map.0][player.gamestate.team as usize]);
+            for entity in entities.0.iter() {
+                if let Ok(mut player) = clients.get_mut(*entity) {
+                    let spawn = &config.worlds[map.0].spawns[player.gamestate.team as usize];
+                    player.pos.set(spawn.pos);
+                    player.look.yaw = spawn.rot[0];
+                    player.look.pitch = spawn.rot[1];
+                    player.yaw.0 = spawn.rot[0];
                 }
             }
         }
-        if stage.0 == 0 {
-            for mut player in clients.iter_mut() {
-                if player.gamestate.game_id == Some(game_id) {
-                    player.client.set_title("3".color(Color::GREEN));
-                }
-            }
-            stage.0 = 1;
-            gamestage.send(GameStageEvent { game_id, stage: 1 });
-        } else if stage.0 == 1
-            && time
-                .0
-                .elapsed()
-                .unwrap_or(std::time::Duration::new(0, 0))
-                .as_secs()
-                >= 1
-        {
-            for mut player in clients.iter_mut() {
-                if player.gamestate.game_id == Some(game_id) {
-                    player.client.set_title("2".color(Color::GOLD));
-                }
-            }
-            stage.0 = 2;
-            gamestage.send(GameStageEvent { game_id, stage: 2 });
-        } else if stage.0 == 2
-            && time
-                .0
-                .elapsed()
-                .unwrap_or(std::time::Duration::new(0, 0))
-                .as_secs()
-                >= 2
-        {
-            for mut player in clients.iter_mut() {
-                if player.gamestate.game_id == Some(game_id) {
-                    player.client.set_title("1".color(Color::RED));
-                }
-            }
-            stage.0 = 3;
-            gamestage.send(GameStageEvent { game_id, stage: 3 });
-        } else if stage.0 == 3
-            && time
-                .0
-                .elapsed()
-                .unwrap_or(std::time::Duration::new(0, 0))
-                .as_secs()
-                >= 3
-        {
-            for mut player in clients.iter_mut() {
-                if player.gamestate.game_id == Some(game_id) {
-                    player.client.set_title("GO!".color(Color::RED));
-                }
-            }
-            stage.0 = 4;
-            gamestage.send(GameStageEvent { game_id, stage: 4 });
-        } else if stage.0 == 4
-            && time
-                .0
-                .elapsed()
-                .unwrap_or(std::time::Duration::new(0, 0))
-                .as_secs()
-                >= 4
-        {
-            for mut player in clients.iter_mut() {
-                if player.gamestate.game_id == Some(game_id) {
-                    player.client.clear_title();
-                }
-            }
-            stage.0 = 5;
-            gamestage.send(GameStageEvent { game_id, stage: 5 });
+        if time.0.elapsed().unwrap().as_secs() >= stage.0 as u64 || stage.0 == 0 {
+            stage.0 += 1;
+            gamestage.send(GameStageEvent {
+                game_id,
+                stage: stage.0,
+            });
         }
     }
 }

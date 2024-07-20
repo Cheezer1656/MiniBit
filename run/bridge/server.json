@@ -1,0 +1,8 @@
+{
+    "ip": "127.0.0.1",
+    "port": 25565,
+    "max_players": 50,
+    "connection_mode": 1,
+    "secret": "",
+    "prevent_proxy_connections": false
+}
