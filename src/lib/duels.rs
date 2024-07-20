@@ -2,7 +2,7 @@
 
 use bevy_ecs::query::WorldQuery;
 use serde::Deserialize;
-use std::{marker::PhantomData, time::SystemTime};
+use std::{collections::HashMap, marker::PhantomData, time::SystemTime};
 use valence::{
     entity::living::Health,
     message::ChatMessageEvent,
@@ -25,6 +25,15 @@ pub struct GameTime(pub SystemTime);
 #[derive(Component)]
 pub struct GameStage(pub u8);
 
+pub enum DataValue {
+    Int(i32),
+    Float(f32),
+    String(String),
+}
+
+#[derive(Component)]
+pub struct GameData(pub HashMap<usize, DataValue>);
+
 #[derive(Bundle)]
 pub struct Game {
     pub map: MapIndex,
@@ -32,6 +41,7 @@ pub struct Game {
     pub clients: Entities,
     pub game_start: GameTime,
     pub game_stage: GameStage,
+    pub data: GameData,
 }
 
 #[derive(Component, Default)]
@@ -76,7 +86,7 @@ pub struct GameSettings {
 #[derive(Resource, Deserialize)]
 pub struct DuelsConfig {
     pub worlds: Vec<WorldValue>,
-    pub other: Option<Vec<f64>>,
+    pub other: Option<Vec<isize>>,
 }
 
 pub struct DuelsPlugin {
@@ -204,6 +214,7 @@ pub fn check_queue(
                 clients: Entities(globals.queue.drain(..2).collect()),
                 game_start: GameTime(SystemTime::now()),
                 game_stage: GameStage(0),
+                data: GameData(HashMap::new()),
             })
             .id();
 
@@ -387,7 +398,7 @@ pub fn gameloop(
                 }
             }
         }
-        if time.0.elapsed().unwrap().as_secs() >= stage.0 as u64 || stage.0 == 0 {
+        if (stage.0 < 5 && time.0.elapsed().unwrap().as_secs() >= stage.0 as u64) || stage.0 == 0 {
             stage.0 += 1;
             gamestage.send(GameStageEvent {
                 game_id,

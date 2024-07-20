@@ -4,9 +4,7 @@
 mod lib;
 
 use bevy_ecs::query::WorldQuery;
-use lib::duels::{
-    CombatState, DuelsConfig, DuelsPlugin, EndGameEvent, Entities, GameStageEvent, MapIndex, PlayerGameState
-};
+use lib::duels::*;
 use valence::entity::living::Health;
 use valence::entity::{EntityId, EntityStatuses};
 use valence::math::Vec3Swizzles;
@@ -20,6 +18,18 @@ use valence::protocol::WritePacket;
 #[derive(Event)]
 struct DeathEvent(Entity);
 
+#[derive(Event)]
+struct ScoreEvent {
+    game: Entity,
+    team: u8,
+}
+
+#[derive(Event)]
+struct MessageEvent {
+    game: Entity,
+    msg: Text,
+}
+
 fn main() {
     App::new()
         .add_plugins(DuelsPlugin {
@@ -27,12 +37,26 @@ fn main() {
         })
         .add_plugins(DefaultPlugins)
         .add_event::<DeathEvent>()
+        .add_event::<ScoreEvent>()
+        .add_event::<MessageEvent>()
         .add_systems(EventLoopUpdate, handle_combat_events)
         .add_systems(
             Update,
-            (handle_death, handle_oob_clients, gamestage_change, end_game),
+            (start_game, gamestage_change, end_game, check_goals, handle_death, handle_score.after(check_goals), handle_oob_clients, game_broadcast),
         )
         .run();
+}
+
+fn start_game(
+    mut games: Query<&mut GameData>,
+    mut start_game: EventReader<StartGameEvent>,
+) {
+    for event in start_game.read() {
+        if let Ok(mut data) = games.get_mut(event.0) {
+            data.0.insert(0, DataValue::Int(0));
+            data.0.insert(1, DataValue::Int(0));
+        }
+    }
 }
 
 fn fill_inventory(inv: &mut Inventory, team: u8) {
@@ -81,6 +105,30 @@ fn end_game(
                     for slot in 0..inv.slot_count() {
                         inv.set_slot(slot, ItemStack::EMPTY);
                     }
+                }
+            }
+        }
+    }
+}
+
+// TODO - Fix double scoring bug
+fn check_goals(
+    clients: Query<(&Position, &PlayerGameState), With<Client>>,
+    config: Res<DuelsConfig>,
+    mut scores: EventWriter<ScoreEvent>,
+) {
+    for (pos, gamestate) in clients.iter() {
+        if let Some(game_id) = gamestate.game_id {
+            if let Some(data) = &config.other {
+                let x = pos.0.x.floor() as isize;
+                let z = pos.0.z.floor() as isize;
+                if data[0] <= x && data[1] >= x
+                    && pos.0.y.floor() as isize == data[2]
+                    && data[3] <= z && data[4] >= z {
+                    scores.send(ScoreEvent {
+                        game: game_id,
+                        team: gamestate.team,
+                    });
                 }
             }
         }
@@ -192,13 +240,14 @@ fn handle_oob_clients(
 }
 
 fn handle_death(
-    mut clients: Query<(&mut Position, &mut Look, &mut HeadYaw, &mut Health, &mut Inventory, &PlayerGameState), With<Client>>,
+    mut clients: Query<(&mut Position, &mut Look, &mut HeadYaw, &mut Health, &mut Inventory, &Username, &PlayerGameState), With<Client>>,
     games: Query<&MapIndex>,
     mut deaths: EventReader<DeathEvent>,
+    mut broadcasts: EventWriter<MessageEvent>,
     config: Res<DuelsConfig>,
 ) {
     for DeathEvent(entity) in deaths.read() {
-        if let Ok((mut pos, mut look, mut head_yaw, mut health, mut inventory, gamestate)) = clients.get_mut(*entity) {
+        if let Ok((mut pos, mut look, mut head_yaw, mut health, mut inventory, username, gamestate)) = clients.get_mut(*entity) {
             if let Some(game_id) = gamestate.game_id {
                 if let Ok(map_index) = games.get(game_id) {
                     let spawn = &config.worlds[map_index.0].spawns[gamestate.team as usize];
@@ -211,6 +260,50 @@ fn handle_death(
                         inventory.set_slot(slot, ItemStack::EMPTY);
                     }
                     fill_inventory(&mut inventory, gamestate.team);
+                    broadcasts.send(MessageEvent {
+                        game: game_id,
+                        msg: (username.0.clone() + " has died!").into(),
+                    });
+                }
+            }
+        }
+    }
+}
+
+fn handle_score(
+    mut games: Query<(&Entities, &mut GameData)>,
+    mut scores: EventReader<ScoreEvent>,
+    mut deaths: EventWriter<DeathEvent>,
+    mut end_game: EventWriter<EndGameEvent>,
+) {
+    for ScoreEvent { game, team } in scores.read() {
+        if let Ok((entities, mut data)) = games.get_mut(*game) {
+            let mut score = 0;
+            if let Some(DataValue::Int(old_score)) = data.0.get(&(*team as usize)) {
+                score = *old_score + 1;
+            }
+            data.0.insert(*team as usize, DataValue::Int(score));
+            for entity in entities.0.iter() {
+                deaths.send(DeathEvent(*entity));
+            }
+            println!("Score: {}", score);
+            if score >= 5 {
+                end_game.send(EndGameEvent { game_id: *game, loser: if *team == 0 { 1 } else { 0 } });
+            }
+        }
+    }
+}
+
+fn game_broadcast(
+    mut clients: Query<&mut Client>,
+    games: Query<&Entities>,
+    mut broadcasts: EventReader<MessageEvent>,
+) {
+    for MessageEvent { game, msg } in broadcasts.read() {
+        if let Ok(entities) = games.get(*game) {
+            for entity in entities.0.iter() {
+                if let Ok(mut client) = clients.get_mut(*entity) {
+                    client.send_chat_message(msg);
                 }
             }
         }
