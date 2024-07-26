@@ -5,7 +5,7 @@ mod lib;
 
 use bevy_ecs::query::WorldQuery;
 use lib::duels::*;
-use valence::entity::arrow::ArrowEntity;
+use lib::physics::*;
 use valence::entity::arrow::ArrowEntityBundle;
 use valence::entity::living::Health;
 use valence::entity::Velocity;
@@ -22,12 +22,13 @@ use valence::protocol::VarInt;
 use valence::protocol::WritePacket;
 
 #[derive(Component)]
-struct ProjectileOwner(EntityId);
+struct ProjectileOwner(Entity);
 
 fn main() {
     App::new()
         .add_plugins(DuelsPlugin { default_gamemode: GameMode::Adventure })
         .add_plugins(DefaultPlugins)
+        .add_plugins(ProjectilePlugin)
         .add_systems(
             EventLoopUpdate,
             (handle_combat_events, handle_player_action),
@@ -37,8 +38,9 @@ fn main() {
             (
                 gamestage_change.after(lib::duels::gameloop),
                 end_game.after(lib::duels::end_game),
-                handle_arrow_physics,
+                handle_collision_events,
                 handle_oob_clients,
+                calc_player_vel,
             ),
         )
         .run();
@@ -88,6 +90,7 @@ struct CombatQuery {
     client: &'static mut Client,
     id: &'static EntityId,
     pos: &'static Position,
+    vel: &'static Velocity,
     state: &'static mut CombatState,
     statuses: &'static mut EntityStatuses,
     gamestate: &'static PlayerGameState,
@@ -144,50 +147,22 @@ fn handle_combat_events(
             6.432
         };
 
-        victim
-            .client
-            .set_velocity([dir.x * knockback_xz, knockback_y, dir.y * knockback_xz]);
+        damage_player(
+            &mut attacker,
+            &mut victim,
+            1.0,
+            Vec3::new(dir.x * knockback_xz, knockback_y, dir.y * knockback_xz),
+            &mut end_game,
+        );
 
         attacker.state.has_bonus_knockback = false;
-
-        victim.client.play_sound(
-            Sound::EntityPlayerHurt,
-            SoundCategory::Player,
-            victim.pos.0,
-            1.0,
-            1.0,
-        );
-        victim.client.write_packet(&DamageTiltS2c {
-            entity_id: VarInt(0),
-            yaw: 0.0,
-        });
-        attacker.client.play_sound(
-            Sound::EntityPlayerHurt,
-            SoundCategory::Player,
-            victim.pos.0,
-            1.0,
-            1.0,
-        );
-        attacker.client.write_packet(&DamageTiltS2c {
-            entity_id: VarInt(victim.id.get()),
-            yaw: 0.0,
-        });
-
-        if victim.health.0 <= 1.0 {
-            end_game.send(EndGameEvent {
-                game_id: victim.gamestate.game_id.unwrap(),
-                loser: victim.gamestate.team,
-            });
-        } else {
-            victim.health.0 -= 1.0;
-        }
     }
 }
 
 #[derive(WorldQuery)]
 #[world_query(mutable)]
 struct ActionQuery {
-    id: &'static EntityId,
+    entity: Entity,
     inv: &'static mut Inventory,
     pos: &'static Position,
     look: &'static Look,
@@ -246,67 +221,28 @@ fn handle_player_action(
                     .id();
                 commands
                     .entity(arrow_id)
-                    .insert(ProjectileOwner(*player.id));
+                    .insert(ProjectileOwner(player.entity));
             }
         }
     }
 }
 
-fn handle_arrow_physics(
-    mut arrows: Query<(&mut Position, &mut Velocity, &ProjectileOwner), With<ArrowEntity>>,
-    mut clients: Query<(&mut Client, &EntityId, &PlayerGameState)>,
-    mut players: Query<
-        (&EntityId, &PlayerGameState, &Position, &mut Health),
-        (With<Client>, Without<ArrowEntity>),
-    >,
-    mut endgame: EventWriter<EndGameEvent>,
+fn handle_collision_events(
+    mut clients: Query<CombatQuery>,
+    arrows: Query<&ProjectileOwner>,
+    mut collisions: EventReader<ProjectileCollisionEvent>,
+    mut end_game: EventWriter<EndGameEvent>,
 ) {
-    for (mut pos, mut velocity, owner) in arrows.iter_mut() {
-        pos.0 += DVec3::from(velocity.0) / 20.0;
-
-        //add gravity
-        velocity.0.y -= 20.0 / 20.0;
-
-        //air friction
-        velocity.0 *= 1.0 - (0.99 / 20.0);
-        for (id, gamestate, player_pos, mut health) in players.iter_mut() {
-            if (pos.0.x - player_pos.0.x).abs() < 0.3
-                && (pos.0.z - player_pos.0.z).abs() < 0.3
-                && (pos.0.y - player_pos.0.y) < 1.8
-                && (pos.0.y - player_pos.0.y) > 0.0
-            {
-                for (mut client, id2, gamestate2) in clients.iter_mut() {
-                    if gamestate2.game_id == gamestate.game_id {
-                        client.play_sound(
-                            Sound::EntityPlayerHurt,
-                            SoundCategory::Player,
-                            pos.0,
-                            1.0,
-                            1.0,
-                        );
-                        client.write_packet(&DamageTiltS2c {
-                            entity_id: VarInt(if id == id2 { 0 } else { id.get() }),
-                            yaw: 0.0,
-                        });
-                    }
-                    if owner.0 == *id2 {
-                        client.play_sound(
-                            Sound::EntityArrowHitPlayer,
-                            SoundCategory::Player,
-                            player_pos.0,
-                            1.0,
-                            1.0,
-                        );
-                    }
-                }
-                if health.0 <= 6.0 {
-                    endgame.send(EndGameEvent {
-                        game_id: gamestate.game_id.unwrap(),
-                        loser: gamestate.team,
-                    });
-                } else {
-                    health.0 -= 6.0;
-                }
+    for event in collisions.read() {
+        if let Ok(owner) = arrows.get(event.arrow) {
+            if let Ok([mut attacker, mut victim]) = clients.get_many_mut([owner.0, event.player]) {
+                damage_player(
+                    &mut attacker,
+                    &mut victim,
+                    6.0,
+                    Vec3::new(0.0, 0.0, 0.0),
+                    &mut end_game,
+                );
             }
         }
     }
@@ -325,5 +261,63 @@ fn handle_oob_clients(
                 });
             }
         }
+    }
+}
+
+fn calc_player_vel(mut clients: Query<(&Position, &OldPosition, &mut Velocity), With<Client>>) {
+    for (pos, old_pos, mut vel) in clients.iter_mut() {
+        vel.0 = Vec3::new(
+            (pos.0.x - old_pos.get().x) as f32,
+            (pos.0.y - old_pos.get().y) as f32,
+            (pos.0.z - old_pos.get().z) as f32,
+        );
+    }
+}
+
+// Helper functions below
+
+fn damage_player(
+    attacker: &mut CombatQueryItem,
+    victim: &mut CombatQueryItem,
+    damage: f32,
+    velocity: Vec3,
+    end_game: &mut EventWriter<EndGameEvent>,
+) {
+    victim
+        .client
+        .set_velocity(victim.vel.0 + velocity);
+
+    attacker.state.has_bonus_knockback = false;
+
+    victim.client.play_sound(
+        Sound::EntityPlayerHurt,
+        SoundCategory::Player,
+        victim.pos.0,
+        1.0,
+        1.0,
+    );
+    victim.client.write_packet(&DamageTiltS2c {
+        entity_id: VarInt(0),
+        yaw: 0.0,
+    });
+    attacker.client.play_sound(
+        Sound::EntityPlayerHurt,
+        SoundCategory::Player,
+        victim.pos.0,
+        1.0,
+        1.0,
+    );
+    attacker.client.write_packet(&DamageTiltS2c {
+        entity_id: VarInt(victim.id.get()),
+        yaw: 0.0,
+    });
+
+    if victim.health.0 <= damage {
+        end_game.send(EndGameEvent {
+            game_id: victim.gamestate.game_id.unwrap(),
+            loser: victim.gamestate.team,
+        });
+    } else {
+        victim.health.0 -= damage;
     }
 }
