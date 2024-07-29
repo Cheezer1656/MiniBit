@@ -7,7 +7,6 @@ use bevy_ecs::query::WorldQuery;
 use lib::duels::*;
 use lib::projectiles::*;
 use valence::entity::living::Health;
-use valence::entity::Velocity;
 use valence::entity::{EntityId, EntityStatuses};
 use valence::math::Vec3Swizzles;
 use valence::prelude::*;
@@ -33,7 +32,6 @@ fn main() {
                 end_game.after(lib::duels::end_game),
                 handle_collision_events,
                 handle_oob_clients,
-                calc_player_vel,
             ),
         )
         .run();
@@ -83,7 +81,7 @@ struct CombatQuery {
     client: &'static mut Client,
     id: &'static EntityId,
     pos: &'static Position,
-    vel: &'static Velocity,
+    old_pos: &'static OldPosition,
     state: &'static mut CombatState,
     statuses: &'static mut EntityStatuses,
     gamestate: &'static PlayerGameState,
@@ -189,16 +187,6 @@ fn handle_oob_clients(
     }
 }
 
-fn calc_player_vel(mut clients: Query<(&Position, &OldPosition, &mut Velocity), With<Client>>) {
-    for (pos, old_pos, mut vel) in clients.iter_mut() {
-        vel.0 = Vec3::new(
-            (pos.0.x - old_pos.get().x) as f32,
-            (pos.0.y - old_pos.get().y) as f32,
-            (pos.0.z - old_pos.get().z) as f32,
-        );
-    }
-}
-
 // Helper functions below
 
 fn damage_player(
@@ -208,9 +196,15 @@ fn damage_player(
     velocity: Vec3,
     end_game: &mut EventWriter<EndGameEvent>,
 ) {
+    let old_vel = Vec3::new(
+        (victim.pos.0.x - victim.old_pos.get().x) as f32,
+        (victim.pos.0.y - victim.old_pos.get().y) as f32,
+        (victim.pos.0.z - victim.old_pos.get().z) as f32,
+    );
+
     victim
         .client
-        .set_velocity(victim.vel.0 + velocity);
+        .set_velocity(old_vel + velocity);
 
     attacker.state.has_bonus_knockback = false;
 
