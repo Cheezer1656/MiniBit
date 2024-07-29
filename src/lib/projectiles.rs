@@ -2,7 +2,7 @@
 
 use bevy_ecs::query::WorldQuery;
 use parry3d::{math::Vector, na::{self, Isometry3}, query::{cast_shapes, ShapeCastOptions}, shape::Cuboid};
-use valence::{entity::{arrow::{ArrowEntity, ArrowEntityBundle}, OnGround, Velocity}, event_loop::PacketEvent, inventory::PlayerAction, prelude::*, protocol::{packets::play::PlayerActionC2s, sound::SoundCategory, Sound}};
+use valence::{entity::{arrow::{ArrowEntity, ArrowEntityBundle}, OnGround, Velocity}, event_loop::PacketEvent, inventory::{HeldItem, PlayerAction}, prelude::*, protocol::{packets::play::PlayerActionC2s, sound::SoundCategory, Sound}};
 
 use super::duels::CombatState;
 
@@ -30,6 +30,7 @@ impl Plugin for ProjectilePlugin {
 #[world_query(mutable)]
 struct ActionQuery {
     entity: Entity,
+    held_item: &'static HeldItem,
     inv: &'static mut Inventory,
     pos: &'static Position,
     look: &'static Look,
@@ -49,11 +50,20 @@ fn handle_player_actions(
                 continue;
             };
             if pkt.action == PlayerAction::ReleaseUseItem
-                && player.inv.slot(36).item == ItemKind::Bow
-                && player.inv.slot(44).item == ItemKind::Arrow
+                && player.inv.slot(player.held_item.slot()).item == ItemKind::Bow
             {
-                let count = player.inv.slot(44).count;
-                player.inv.set_slot_amount(44, count - 1);
+                let mut arrow_slot = None;
+                for i in 0..player.inv.slot_count() {
+                    if player.inv.slot(i).item == ItemKind::Arrow {
+                        arrow_slot = Some(i);
+                        break;
+                    }
+                }
+                let Some(arrow_slot) = arrow_slot else {
+                    continue;
+                };
+                let count = player.inv.slot(arrow_slot).count;
+                player.inv.set_slot_amount(arrow_slot, count - 1);
                 for mut client in clients.iter_mut() {
                     client.play_sound(
                         Sound::EntityArrowShoot,

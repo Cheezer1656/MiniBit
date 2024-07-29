@@ -5,6 +5,7 @@ mod lib;
 
 use bevy_ecs::query::WorldQuery;
 use lib::duels::*;
+use lib::projectiles::*;
 use valence::entity::living::Health;
 use valence::entity::{EntityId, EntityStatuses};
 use valence::math::Vec3Swizzles;
@@ -36,13 +37,14 @@ fn main() {
             default_gamemode: GameMode::Survival,
         })
         .add_plugins(DefaultPlugins)
+        .add_plugins(ProjectilePlugin)
         .add_event::<DeathEvent>()
         .add_event::<ScoreEvent>()
         .add_event::<MessageEvent>()
         .add_systems(EventLoopUpdate, handle_combat_events)
         .add_systems(
             Update,
-            (start_game, gamestage_change, end_game, check_goals, handle_death, handle_score.after(check_goals), handle_oob_clients, game_broadcast),
+            (start_game, gamestage_change, end_game, check_goals, handle_collision_events, handle_death, handle_score.after(check_goals), handle_oob_clients, game_broadcast),
         )
         .run();
 }
@@ -138,12 +140,15 @@ fn check_goals(
 #[derive(WorldQuery)]
 #[world_query(mutable)]
 struct CombatQuery {
+    entity: Entity,
     client: &'static mut Client,
     id: &'static EntityId,
     pos: &'static Position,
+    old_pos: &'static OldPosition,
     state: &'static mut CombatState,
     statuses: &'static mut EntityStatuses,
     gamestate: &'static PlayerGameState,
+    health: &'static mut Health,
 }
 
 fn handle_combat_events(
@@ -151,6 +156,7 @@ fn handle_combat_events(
     mut clients: Query<CombatQuery>,
     mut sprinting: EventReader<SprintEvent>,
     mut interact_entity: EventReader<InteractEntityEvent>,
+    mut deaths: EventWriter<DeathEvent>,
 ) {
     for &SprintEvent { client, state } in sprinting.read() {
         if let Ok(mut client) = clients.get_mut(client) {
@@ -195,34 +201,36 @@ fn handle_combat_events(
             6.432
         };
 
-        victim
-            .client
-            .set_velocity([dir.x * knockback_xz, knockback_y, dir.y * knockback_xz]);
+        damage_player(
+            &mut attacker,
+            &mut victim,
+            1.0,
+            Vec3::new(dir.x * knockback_xz, knockback_y, dir.y * knockback_xz),
+            &mut deaths,
+        );
 
         attacker.state.has_bonus_knockback = false;
+    }
+}
 
-        victim.client.play_sound(
-            Sound::EntityPlayerHurt,
-            SoundCategory::Player,
-            victim.pos.0,
-            1.0,
-            1.0,
-        );
-        victim.client.write_packet(&DamageTiltS2c {
-            entity_id: VarInt(0),
-            yaw: 0.0,
-        });
-        attacker.client.play_sound(
-            Sound::EntityPlayerHurt,
-            SoundCategory::Player,
-            victim.pos.0,
-            1.0,
-            1.0,
-        );
-        attacker.client.write_packet(&DamageTiltS2c {
-            entity_id: VarInt(victim.id.get()),
-            yaw: 0.0,
-        });
+fn handle_collision_events(
+    mut clients: Query<CombatQuery>,
+    arrows: Query<&ProjectileOwner>,
+    mut collisions: EventReader<ProjectileCollisionEvent>,
+    mut deaths: EventWriter<DeathEvent>,
+) {
+    for event in collisions.read() {
+        if let Ok(owner) = arrows.get(event.arrow) {
+            if let Ok([mut attacker, mut victim]) = clients.get_many_mut([owner.0, event.player]) {
+                damage_player(
+                    &mut attacker,
+                    &mut victim,
+                    6.0,
+                    Vec3::new(0.0, 0.0, 0.0),
+                    &mut deaths,
+                );
+            }
+        }
     }
 }
 
@@ -307,5 +315,56 @@ fn game_broadcast(
                 }
             }
         }
+    }
+}
+
+// Helper functions below
+
+fn damage_player(
+    attacker: &mut CombatQueryItem,
+    victim: &mut CombatQueryItem,
+    damage: f32,
+    velocity: Vec3,
+    deaths: &mut EventWriter<DeathEvent>,
+) {
+    let old_vel = Vec3::new(
+        (victim.pos.0.x - victim.old_pos.get().x) as f32,
+        (victim.pos.0.y - victim.old_pos.get().y) as f32,
+        (victim.pos.0.z - victim.old_pos.get().z) as f32,
+    );
+
+    victim
+        .client
+        .set_velocity(old_vel + velocity);
+
+    attacker.state.has_bonus_knockback = false;
+
+    victim.client.play_sound(
+        Sound::EntityPlayerHurt,
+        SoundCategory::Player,
+        victim.pos.0,
+        1.0,
+        1.0,
+    );
+    victim.client.write_packet(&DamageTiltS2c {
+        entity_id: VarInt(0),
+        yaw: 0.0,
+    });
+    attacker.client.play_sound(
+        Sound::EntityPlayerHurt,
+        SoundCategory::Player,
+        victim.pos.0,
+        1.0,
+        1.0,
+    );
+    attacker.client.write_packet(&DamageTiltS2c {
+        entity_id: VarInt(victim.id.get()),
+        yaw: 0.0,
+    });
+
+    if victim.health.0 <= damage {
+        deaths.send(DeathEvent(victim.entity));
+    } else {
+        victim.health.0 -= damage;
     }
 }
