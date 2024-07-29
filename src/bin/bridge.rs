@@ -8,7 +8,9 @@ use lib::duels::*;
 use lib::projectiles::*;
 use valence::entity::living::Health;
 use valence::entity::{EntityId, EntityStatuses};
+use valence::inventory::HeldItem;
 use valence::math::Vec3Swizzles;
+use valence::nbt::compound;
 use valence::prelude::*;
 use valence::protocol::packets::play::DamageTiltS2c;
 use valence::protocol::sound::SoundCategory;
@@ -50,42 +52,15 @@ fn main() {
 }
 
 fn start_game(
-    mut games: Query<&mut GameData>,
+    mut clients: Query<(&mut Inventory, &PlayerGameState), With<Client>>,
+    mut games: Query<(&Entities, &mut GameData)>,
     mut start_game: EventReader<StartGameEvent>,
 ) {
     for event in start_game.read() {
-        if let Ok(mut data) = games.get_mut(event.0) {
+        if let Ok((entities, mut data)) = games.get_mut(event.0) {
             data.0.insert(0, DataValue::Int(0));
             data.0.insert(1, DataValue::Int(0));
-        }
-    }
-}
 
-fn fill_inventory(inv: &mut Inventory, team: u8) {
-    let block_type = match team {
-        0 => ItemKind::BlueTerracotta,
-        1 => ItemKind::RedTerracotta,
-        _ => ItemKind::Terracotta,
-    };
-    inv.set_slot(36, ItemStack::new(ItemKind::IronSword, 1, None));
-    inv.set_slot(37, ItemStack::new(ItemKind::Bow, 1, None));
-    inv.set_slot(38, ItemStack::new(ItemKind::DiamondPickaxe, 1, None));
-    inv.set_slot(39, ItemStack::new(block_type, 64, None));
-    inv.set_slot(40, ItemStack::new(block_type, 64, None));
-    inv.set_slot(41, ItemStack::new(ItemKind::GoldenApple, 8, None));
-    inv.set_slot(44, ItemStack::new(ItemKind::Arrow, 10, None));
-}
-
-fn gamestage_change(
-    mut clients: Query<(&mut Inventory, &PlayerGameState), With<Client>>,
-    games: Query<&Entities>,
-    mut event: EventReader<GameStageEvent>,
-) {
-    for event in event.read() {
-        if event.stage != 4 {
-            continue;
-        }
-        if let Ok(entities) = games.get(event.game_id) {
             for entity in entities.0.iter() {
                 if let Ok((mut inventory, gamestate)) = clients.get_mut(*entity) {
                     fill_inventory(&mut inventory, gamestate.team);
@@ -93,6 +68,33 @@ fn gamestage_change(
             }
         }
     }
+}
+
+fn fill_inventory(inv: &mut Inventory, team: u8) {
+    let armor_nbt = Some(compound! {
+        "display" => compound! {
+            "color" => match team {
+                0 => 3949738,
+                1 => 11546150,
+                _ => 0,
+            }
+        }
+    });
+    let block_type = match team {
+        0 => ItemKind::BlueTerracotta,
+        1 => ItemKind::RedTerracotta,
+        _ => ItemKind::Terracotta,
+    };
+    inv.set_slot(6, ItemStack::new(ItemKind::LeatherChestplate, 1, armor_nbt.clone()));
+    inv.set_slot(7, ItemStack::new(ItemKind::LeatherLeggings, 1, armor_nbt.clone()));
+    inv.set_slot(8, ItemStack::new(ItemKind::LeatherBoots, 1, armor_nbt));
+    inv.set_slot(36, ItemStack::new(ItemKind::IronSword, 1, None));
+    inv.set_slot(37, ItemStack::new(ItemKind::Bow, 1, None));
+    inv.set_slot(38, ItemStack::new(ItemKind::DiamondPickaxe, 1, None));
+    inv.set_slot(39, ItemStack::new(block_type, 64, None));
+    inv.set_slot(40, ItemStack::new(block_type, 64, None));
+    inv.set_slot(41, ItemStack::new(ItemKind::GoldenApple, 8, None));
+    inv.set_slot(44, ItemStack::new(ItemKind::Arrow, 10, None));
 }
 
 fn end_game(
@@ -123,13 +125,23 @@ fn check_goals(
         if let Some(game_id) = gamestate.game_id {
             if let Some(data) = &config.other {
                 let x = pos.0.x.floor() as isize;
+                let y = pos.0.y.floor() as isize;
                 let z = pos.0.z.floor() as isize;
-                if data[0] <= x && data[1] >= x
-                    && pos.0.y.floor() as isize == data[2]
+                if gamestate.team == 1
+                    && data[0] <= x && data[1] >= x
+                    && y == data[2]
                     && data[3] <= z && data[4] >= z {
                     scores.send(ScoreEvent {
                         game: game_id,
-                        team: gamestate.team,
+                        team: 1,
+                    });
+                } else if gamestate.team == 0
+                    && data[5] <= x && data[6] >= x
+                    && y == data[7]
+                    && data[8] <= z && data[9] >= z {
+                    scores.send(ScoreEvent {
+                        game: game_id,
+                        team: 0,
                     });
                 }
             }
@@ -149,6 +161,8 @@ struct CombatQuery {
     statuses: &'static mut EntityStatuses,
     gamestate: &'static PlayerGameState,
     health: &'static mut Health,
+    held_item: &'static HeldItem,
+    inv: &'static Inventory,
 }
 
 fn handle_combat_events(
@@ -201,10 +215,16 @@ fn handle_combat_events(
             6.432
         };
 
+        let dmg = match attacker.inv.slot(attacker.held_item.slot()).item {
+            ItemKind::IronSword => 6.0,
+            ItemKind::DiamondPickaxe => 5.0,
+            _ => 1.0,
+        };
+
         damage_player(
             &mut attacker,
             &mut victim,
-            1.0,
+            dmg,
             Vec3::new(dir.x * knockback_xz, knockback_y, dir.y * knockback_xz),
             &mut deaths,
         );
@@ -294,7 +314,7 @@ fn handle_score(
             for entity in entities.0.iter() {
                 deaths.send(DeathEvent(*entity));
             }
-            println!("Score: {}", score);
+            println!("Score: {} (Team {})", score, team);
             if score >= 5 {
                 end_game.send(EndGameEvent { game_id: *game, loser: if *team == 0 { 1 } else { 0 } });
             }
