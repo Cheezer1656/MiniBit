@@ -5,24 +5,17 @@ mod lib;
 
 use bevy_ecs::query::WorldQuery;
 use lib::duels::*;
-use lib::physics::*;
-use valence::entity::arrow::ArrowEntityBundle;
+use lib::projectiles::*;
 use valence::entity::living::Health;
 use valence::entity::Velocity;
 use valence::entity::{EntityId, EntityStatuses};
-use valence::event_loop::PacketEvent;
-use valence::inventory::PlayerAction;
 use valence::math::Vec3Swizzles;
 use valence::prelude::*;
 use valence::protocol::packets::play::DamageTiltS2c;
-use valence::protocol::packets::play::PlayerActionC2s;
 use valence::protocol::sound::SoundCategory;
 use valence::protocol::Sound;
 use valence::protocol::VarInt;
 use valence::protocol::WritePacket;
-
-#[derive(Component)]
-struct ProjectileOwner(Entity);
 
 fn main() {
     App::new()
@@ -31,7 +24,7 @@ fn main() {
         .add_plugins(ProjectilePlugin)
         .add_systems(
             EventLoopUpdate,
-            (handle_combat_events, handle_player_action),
+            handle_combat_events,
         )
         .add_systems(
             Update,
@@ -156,74 +149,6 @@ fn handle_combat_events(
         );
 
         attacker.state.has_bonus_knockback = false;
-    }
-}
-
-#[derive(WorldQuery)]
-#[world_query(mutable)]
-struct ActionQuery {
-    entity: Entity,
-    inv: &'static mut Inventory,
-    pos: &'static Position,
-    look: &'static Look,
-    yaw: &'static HeadYaw,
-    layer: &'static EntityLayerId,
-    state: &'static mut CombatState,
-}
-fn handle_player_action(
-    mut players: Query<ActionQuery>,
-    mut clients: Query<&mut Client>,
-    mut packets: EventReader<PacketEvent>,
-    mut commands: Commands,
-) {
-    for packet in packets.read() {
-        if let Some(pkt) = packet.decode::<PlayerActionC2s>() {
-            let Ok(mut player) = players.get_mut(packet.client) else {
-                continue;
-            };
-            if pkt.action == PlayerAction::ReleaseUseItem
-                && player.inv.slot(36).item == ItemKind::Bow
-                && player.inv.slot(44).item == ItemKind::Arrow
-            {
-                let count = player.inv.slot(44).count;
-                player.inv.set_slot_amount(44, count - 1);
-                for mut client in clients.iter_mut() {
-                    client.play_sound(
-                        Sound::EntityArrowShoot,
-                        SoundCategory::Player,
-                        player.pos.0,
-                        1.0,
-                        1.0,
-                    );
-                }
-                let rad_yaw = player.yaw.0.to_radians();
-                let rad_pitch = player.look.pitch.to_radians();
-                let hspeed = rad_pitch.cos();
-                let vel = Vec3::new(
-                    -rad_yaw.sin() * hspeed,
-                    -rad_pitch.sin(),
-                    rad_yaw.cos() * hspeed,
-                ) * 30.0;
-                let dir = vel.normalize().as_dvec3() * 0.5;
-                let arrow_id = commands
-                    .spawn(ArrowEntityBundle {
-                        position: Position(DVec3::new(
-                            player.pos.0.x + dir.x,
-                            player.pos.0.y + 1.62,
-                            player.pos.0.z + dir.z,
-                        )),
-                        look: *player.look,
-                        head_yaw: *player.yaw,
-                        velocity: Velocity(vel),
-                        layer: *player.layer,
-                        ..Default::default()
-                    })
-                    .id();
-                commands
-                    .entity(arrow_id)
-                    .insert(ProjectileOwner(player.entity));
-            }
-        }
     }
 }
 
