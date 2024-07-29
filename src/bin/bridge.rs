@@ -5,6 +5,7 @@ mod lib;
 
 use bevy_ecs::query::WorldQuery;
 use lib::duels::*;
+use lib::player::*;
 use lib::projectiles::*;
 use valence::entity::living::Health;
 use valence::entity::{EntityId, EntityStatuses};
@@ -39,14 +40,14 @@ fn main() {
             default_gamemode: GameMode::Survival,
         })
         .add_plugins(DefaultPlugins)
-        .add_plugins(ProjectilePlugin)
+        .add_plugins((InvBroadcastPlugin, ProjectilePlugin))
         .add_event::<DeathEvent>()
         .add_event::<ScoreEvent>()
         .add_event::<MessageEvent>()
         .add_systems(EventLoopUpdate, handle_combat_events)
         .add_systems(
             Update,
-            (start_game, gamestage_change, end_game, check_goals, handle_collision_events, handle_death, handle_score.after(check_goals), handle_oob_clients, game_broadcast),
+            (start_game.after(lib::duels::start_game), gamestage_change, end_game, check_goals, handle_collision_events, handle_death, handle_score.after(check_goals), handle_oob_clients, game_broadcast),
         )
         .run();
 }
