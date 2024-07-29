@@ -20,7 +20,7 @@ use valence::protocol::VarInt;
 use valence::protocol::WritePacket;
 
 #[derive(Event)]
-struct DeathEvent(Entity);
+struct DeathEvent(Entity, bool);
 
 #[derive(Event)]
 struct ScoreEvent {
@@ -47,7 +47,7 @@ fn main() {
         .add_systems(EventLoopUpdate, handle_combat_events)
         .add_systems(
             Update,
-            (start_game.after(lib::duels::start_game), gamestage_change, end_game, check_goals, handle_collision_events, handle_death, handle_score.after(check_goals), handle_oob_clients, game_broadcast),
+            (start_game.after(lib::duels::start_game), gamestage_change, end_game, check_goals, handle_collision_events, handle_death, handle_score.after(check_goals).before(handle_death), handle_oob_clients, game_broadcast),
         )
         .run();
 }
@@ -116,7 +116,6 @@ fn end_game(
     }
 }
 
-// TODO - Fix double scoring bug
 fn check_goals(
     clients: Query<(Entity, &Position, &PlayerGameState), With<Client>>,
     config: Res<DuelsConfig>,
@@ -137,7 +136,7 @@ fn check_goals(
                             game: game_id,
                             team: 1,
                         }),
-                        _ => deaths.send(DeathEvent(entity)),
+                        _ => deaths.send(DeathEvent(entity, true)),
                     }
                 } else if data[5] <= x && data[6] >= x
                     && y == data[7]
@@ -147,7 +146,7 @@ fn check_goals(
                             game: game_id,
                             team: 0,
                         }),
-                        _ => deaths.send(DeathEvent(entity)),
+                        _ => deaths.send(DeathEvent(entity, true)),
                     }
                 }
             }
@@ -267,7 +266,7 @@ fn handle_oob_clients(
     for (entity, pos, gamestate) in positions.iter() {
         if pos.0.y < 0.0 {
             if gamestate.game_id.is_some() {
-                deaths.send(DeathEvent(entity));
+                deaths.send(DeathEvent(entity, true));
             }
         }
     }
@@ -280,7 +279,7 @@ fn handle_death(
     mut broadcasts: EventWriter<MessageEvent>,
     config: Res<DuelsConfig>,
 ) {
-    for DeathEvent(entity) in deaths.read() {
+    for DeathEvent(entity, show) in deaths.read() {
         if let Ok((mut pos, mut look, mut head_yaw, mut health, mut inventory, username, gamestate)) = clients.get_mut(*entity) {
             if let Some(game_id) = gamestate.game_id {
                 if let Ok(map_index) = games.get(game_id) {
@@ -294,10 +293,12 @@ fn handle_death(
                         inventory.set_slot(slot, ItemStack::EMPTY);
                     }
                     fill_inventory(&mut inventory, gamestate.team);
-                    broadcasts.send(MessageEvent {
-                        game: game_id,
-                        msg: (username.0.clone() + " has died!").into(),
-                    });
+                    if *show {
+                        broadcasts.send(MessageEvent {
+                            game: game_id,
+                            msg: Text::from(username.0.clone()).color(if gamestate.team == 0 { Color::BLUE } else { Color::RED }) + Text::from(" has died!").color(Color::GRAY),
+                        });
+                    }
                 }
             }
         }
@@ -308,6 +309,7 @@ fn handle_score(
     mut games: Query<(&Entities, &mut GameData)>,
     mut scores: EventReader<ScoreEvent>,
     mut deaths: EventWriter<DeathEvent>,
+    mut broadcasts: EventWriter<MessageEvent>,
     mut end_game: EventWriter<EndGameEvent>,
 ) {
     for ScoreEvent { game, team } in scores.read() {
@@ -318,9 +320,12 @@ fn handle_score(
             }
             data.0.insert(*team as usize, DataValue::Int(score));
             for entity in entities.0.iter() {
-                deaths.send(DeathEvent(*entity));
+                deaths.send(DeathEvent(*entity, false));
             }
-            println!("Score: {} (Team {})", score, team);
+            broadcasts.send(MessageEvent {
+                game: *game,
+                msg: if *team == 0 { Text::from("Team Blue").color(Color::BLUE) } else { Text::from("Team Red").color(Color::RED) } + Text::from(" scored! (").color(Color::GRAY) + Text::from(score.to_string()).color(Color::GOLD) + Text::from("/5)").color(Color::GRAY),
+            });
             if score >= 5 {
                 end_game.send(EndGameEvent { game_id: *game, loser: if *team == 0 { 1 } else { 0 } });
             }
@@ -389,7 +394,7 @@ fn damage_player(
     });
 
     if victim.health.0 <= damage {
-        deaths.send(DeathEvent(victim.entity));
+        deaths.send(DeathEvent(victim.entity, true));
     } else {
         victim.health.0 -= damage;
     }
