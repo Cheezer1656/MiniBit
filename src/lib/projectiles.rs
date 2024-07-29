@@ -22,7 +22,7 @@ impl Plugin for ProjectilePlugin {
         app
             .add_event::<ProjectileCollisionEvent>()
             .add_systems(EventLoopUpdate, handle_player_actions)
-            .add_systems(Update, apply_arrow_physics);
+            .add_systems(Update, (apply_arrow_physics, cleanup_arrows));
     }
 }
 
@@ -52,14 +52,7 @@ fn handle_player_actions(
             if pkt.action == PlayerAction::ReleaseUseItem
                 && player.inv.slot(player.held_item.slot()).item == ItemKind::Bow
             {
-                let mut arrow_slot = None;
-                for i in 0..player.inv.slot_count() {
-                    if player.inv.slot(i).item == ItemKind::Arrow {
-                        arrow_slot = Some(i);
-                        break;
-                    }
-                }
-                let Some(arrow_slot) = arrow_slot else {
+                let Some(arrow_slot) = player.inv.first_slot_with_item(ItemKind::Arrow, 65) else {
                     continue;
                 };
                 let count = player.inv.slot(arrow_slot).count;
@@ -140,6 +133,17 @@ pub fn apply_arrow_physics(
                     player: player_entity,
                 });
             }
+        }
+    }
+}
+
+fn cleanup_arrows(
+    arrows: Query<(Entity, &Position), With<ArrowEntity>>,
+    mut commands: Commands,
+) {
+    for (entity, pos) in arrows.iter() {
+        if pos.0.y < -50.0 {
+            commands.entity(entity).insert(Despawned);
         }
     }
 }
