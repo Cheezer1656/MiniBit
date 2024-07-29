@@ -118,32 +118,37 @@ fn end_game(
 
 // TODO - Fix double scoring bug
 fn check_goals(
-    clients: Query<(&Position, &PlayerGameState), With<Client>>,
+    clients: Query<(Entity, &Position, &PlayerGameState), With<Client>>,
     config: Res<DuelsConfig>,
     mut scores: EventWriter<ScoreEvent>,
+    mut deaths: EventWriter<DeathEvent>,
 ) {
-    for (pos, gamestate) in clients.iter() {
+    for (entity, pos, gamestate) in clients.iter() {
         if let Some(game_id) = gamestate.game_id {
             if let Some(data) = &config.other {
                 let x = pos.0.x.floor() as isize;
                 let y = pos.0.y.floor() as isize;
                 let z = pos.0.z.floor() as isize;
-                if gamestate.team == 1
-                    && data[0] <= x && data[1] >= x
+                if data[0] <= x && data[1] >= x
                     && y == data[2]
                     && data[3] <= z && data[4] >= z {
-                    scores.send(ScoreEvent {
-                        game: game_id,
-                        team: 1,
-                    });
-                } else if gamestate.team == 0
-                    && data[5] <= x && data[6] >= x
+                    match gamestate.team {
+                        1 => scores.send(ScoreEvent {
+                            game: game_id,
+                            team: 1,
+                        }),
+                        _ => deaths.send(DeathEvent(entity)),
+                    }
+                } else if data[5] <= x && data[6] >= x
                     && y == data[7]
                     && data[8] <= z && data[9] >= z {
-                    scores.send(ScoreEvent {
-                        game: game_id,
-                        team: 0,
-                    });
+                    match gamestate.team {
+                        0 => scores.send(ScoreEvent {
+                            game: game_id,
+                            team: 0,
+                        }),
+                        _ => deaths.send(DeathEvent(entity)),
+                    }
                 }
             }
         }
