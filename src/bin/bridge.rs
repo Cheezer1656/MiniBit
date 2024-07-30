@@ -8,13 +8,17 @@ use lib::duels::*;
 use lib::player::*;
 use lib::projectiles::*;
 use lib::world::*;
+use valence::entity::living::Absorption;
 use valence::entity::living::Health;
 use valence::entity::{EntityId, EntityStatuses};
+use valence::event_loop::PacketEvent;
 use valence::inventory::HeldItem;
+use valence::inventory::PlayerAction;
 use valence::math::Vec3Swizzles;
 use valence::nbt::compound;
 use valence::prelude::*;
 use valence::protocol::packets::play::DamageTiltS2c;
+use valence::protocol::packets::play::PlayerActionC2s;
 use valence::protocol::sound::SoundCategory;
 use valence::protocol::Sound;
 use valence::protocol::VarInt;
@@ -66,6 +70,7 @@ fn main() {
                 gamestage_change,
                 end_game,
                 check_goals,
+                eat_gapple,
                 handle_collision_events,
                 handle_death,
                 handle_score.after(check_goals).before(handle_death),
@@ -185,6 +190,27 @@ fn check_goals(
     }
 }
 
+fn eat_gapple(
+    mut clients: Query<(&mut Health, &mut Absorption, &mut Inventory, &HeldItem), With<Client>>,
+    mut packets: EventReader<PacketEvent>,
+) {
+    for packet in packets.read() {
+        let Some(pkt) = packet.decode::<PlayerActionC2s>() else {
+            continue;
+        };
+        let Ok((mut health, mut absorption, mut inv, held_item)) = clients.get_mut(packet.client) else {
+            continue;
+        };
+        let slot = held_item.slot();
+        if pkt.action == PlayerAction::ReleaseUseItem && inv.slot(slot).item == ItemKind::GoldenApple {
+            health.0 = 20.0;
+            absorption.0 = 4.0;
+            let count = inv.slot(slot).count;
+            inv.set_slot_amount(held_item.slot(), count - 1);
+        }
+    }
+}
+
 #[derive(WorldQuery)]
 #[world_query(mutable)]
 struct CombatQuery {
@@ -197,6 +223,7 @@ struct CombatQuery {
     statuses: &'static mut EntityStatuses,
     gamestate: &'static PlayerGameState,
     health: &'static mut Health,
+    absorption: &'static mut Absorption,
     held_item: &'static HeldItem,
     inv: &'static Inventory,
 }
@@ -310,6 +337,7 @@ fn handle_death(
             &mut Look,
             &mut HeadYaw,
             &mut Health,
+            &mut Absorption,
             &mut Inventory,
             &Username,
             &PlayerGameState,
@@ -327,6 +355,7 @@ fn handle_death(
             mut look,
             mut head_yaw,
             mut health,
+            mut absorption,
             mut inventory,
             username,
             gamestate,
@@ -340,6 +369,7 @@ fn handle_death(
                     look.pitch = spawn.rot[1];
                     head_yaw.0 = spawn.rot[0];
                     health.0 = 20.0;
+                    absorption.0 = 0.0;
                     for slot in 0..inventory.slot_count() {
                         inventory.set_slot(slot, ItemStack::EMPTY);
                     }
@@ -455,9 +485,14 @@ fn damage_player(
         yaw: 0.0,
     });
 
-    if victim.health.0 <= damage {
+    let mut new_damage = damage;
+    if victim.absorption.0 > 0.0 {
+        new_damage -= damage.min(victim.absorption.0);
+        victim.absorption.0 -= damage.min(victim.absorption.0);
+    }
+    if victim.health.0 <= new_damage {
         deaths.send(DeathEvent(victim.entity, true));
     } else {
-        victim.health.0 -= damage;
+        victim.health.0 -= new_damage;
     }
 }
