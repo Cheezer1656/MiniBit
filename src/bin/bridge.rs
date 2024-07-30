@@ -7,6 +7,7 @@ use bevy_ecs::query::WorldQuery;
 use lib::duels::*;
 use lib::player::*;
 use lib::projectiles::*;
+use lib::world::*;
 use valence::entity::living::Health;
 use valence::entity::{EntityId, EntityStatuses};
 use valence::inventory::HeldItem;
@@ -40,7 +41,7 @@ fn main() {
             default_gamemode: GameMode::Survival,
         })
         .add_plugins(DefaultPlugins)
-        .add_plugins((InvBroadcastPlugin, ProjectilePlugin))
+        .add_plugins((InvBroadcastPlugin, ProjectilePlugin, PlacingPlugin, DiggingPlugin { whitelist: vec![BlockKind::BlueTerracotta, BlockKind::RedTerracotta, BlockKind::WhiteTerracotta] }))
         .add_event::<DeathEvent>()
         .add_event::<ScoreEvent>()
         .add_event::<MessageEvent>()
@@ -84,7 +85,7 @@ fn fill_inventory(inv: &mut Inventory, team: u8) {
     let block_type = match team {
         0 => ItemKind::BlueTerracotta,
         1 => ItemKind::RedTerracotta,
-        _ => ItemKind::Terracotta,
+        _ => ItemKind::WhiteTerracotta,
     };
     inv.set_slot(6, ItemStack::new(ItemKind::LeatherChestplate, 1, armor_nbt.clone()));
     inv.set_slot(7, ItemStack::new(ItemKind::LeatherLeggings, 1, armor_nbt.clone()));
