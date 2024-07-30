@@ -41,14 +41,35 @@ fn main() {
             default_gamemode: GameMode::Survival,
         })
         .add_plugins(DefaultPlugins)
-        .add_plugins((InvBroadcastPlugin, ProjectilePlugin, PlacingPlugin, DiggingPlugin { whitelist: vec![BlockKind::BlueTerracotta, BlockKind::RedTerracotta, BlockKind::WhiteTerracotta] }))
+        .add_plugins((
+            InvBroadcastPlugin,
+            ProjectilePlugin,
+            PlacingPlugin,
+            DiggingPlugin {
+                whitelist: vec![
+                    BlockKind::BlueTerracotta,
+                    BlockKind::RedTerracotta,
+                    BlockKind::WhiteTerracotta,
+                ],
+            },
+        ))
         .add_event::<DeathEvent>()
         .add_event::<ScoreEvent>()
         .add_event::<MessageEvent>()
         .add_systems(EventLoopUpdate, handle_combat_events)
         .add_systems(
             Update,
-            (start_game.after(lib::duels::start_game), gamestage_change, end_game, check_goals, handle_collision_events, handle_death, handle_score.after(check_goals).before(handle_death), handle_oob_clients, game_broadcast),
+            (
+                start_game.after(lib::duels::start_game),
+                gamestage_change,
+                end_game,
+                check_goals,
+                handle_collision_events,
+                handle_death,
+                handle_score.after(check_goals).before(handle_death),
+                handle_oob_clients,
+                game_broadcast,
+            ),
         )
         .run();
 }
@@ -87,8 +108,14 @@ fn fill_inventory(inv: &mut Inventory, team: u8) {
         1 => ItemKind::RedTerracotta,
         _ => ItemKind::WhiteTerracotta,
     };
-    inv.set_slot(6, ItemStack::new(ItemKind::LeatherChestplate, 1, armor_nbt.clone()));
-    inv.set_slot(7, ItemStack::new(ItemKind::LeatherLeggings, 1, armor_nbt.clone()));
+    inv.set_slot(
+        6,
+        ItemStack::new(ItemKind::LeatherChestplate, 1, armor_nbt.clone()),
+    );
+    inv.set_slot(
+        7,
+        ItemStack::new(ItemKind::LeatherLeggings, 1, armor_nbt.clone()),
+    );
     inv.set_slot(8, ItemStack::new(ItemKind::LeatherBoots, 1, armor_nbt));
     inv.set_slot(36, ItemStack::new(ItemKind::IronSword, 1, None));
     inv.set_slot(37, ItemStack::new(ItemKind::Bow, 1, None));
@@ -129,9 +156,7 @@ fn check_goals(
                 let x = pos.0.x.floor() as isize;
                 let y = pos.0.y.floor() as isize;
                 let z = pos.0.z.floor() as isize;
-                if data[0] <= x && data[1] >= x
-                    && y == data[2]
-                    && data[3] <= z && data[4] >= z {
+                if data[0] <= x && data[1] >= x && y == data[2] && data[3] <= z && data[4] >= z {
                     match gamestate.team {
                         1 => scores.send(ScoreEvent {
                             game: game_id,
@@ -139,9 +164,12 @@ fn check_goals(
                         }),
                         _ => deaths.send(DeathEvent(entity, true)),
                     }
-                } else if data[5] <= x && data[6] >= x
+                } else if data[5] <= x
+                    && data[6] >= x
                     && y == data[7]
-                    && data[8] <= z && data[9] >= z {
+                    && data[8] <= z
+                    && data[9] >= z
+                {
                     match gamestate.team {
                         0 => scores.send(ScoreEvent {
                             game: game_id,
@@ -274,14 +302,34 @@ fn handle_oob_clients(
 }
 
 fn handle_death(
-    mut clients: Query<(&mut Position, &mut Look, &mut HeadYaw, &mut Health, &mut Inventory, &Username, &PlayerGameState), With<Client>>,
+    mut clients: Query<
+        (
+            &mut Position,
+            &mut Look,
+            &mut HeadYaw,
+            &mut Health,
+            &mut Inventory,
+            &Username,
+            &PlayerGameState,
+        ),
+        With<Client>,
+    >,
     games: Query<&MapIndex>,
     mut deaths: EventReader<DeathEvent>,
     mut broadcasts: EventWriter<MessageEvent>,
     config: Res<DuelsConfig>,
 ) {
     for DeathEvent(entity, show) in deaths.read() {
-        if let Ok((mut pos, mut look, mut head_yaw, mut health, mut inventory, username, gamestate)) = clients.get_mut(*entity) {
+        if let Ok((
+            mut pos,
+            mut look,
+            mut head_yaw,
+            mut health,
+            mut inventory,
+            username,
+            gamestate,
+        )) = clients.get_mut(*entity)
+        {
             if let Some(game_id) = gamestate.game_id {
                 if let Ok(map_index) = games.get(game_id) {
                     let spawn = &config.worlds[map_index.0].spawns[gamestate.team as usize];
@@ -297,7 +345,11 @@ fn handle_death(
                     if *show {
                         broadcasts.send(MessageEvent {
                             game: game_id,
-                            msg: Text::from(username.0.clone()).color(if gamestate.team == 0 { Color::BLUE } else { Color::RED }) + Text::from(" has died!").color(Color::GRAY),
+                            msg: Text::from(username.0.clone()).color(if gamestate.team == 0 {
+                                Color::BLUE
+                            } else {
+                                Color::RED
+                            }) + Text::from(" has died!").color(Color::GRAY),
                         });
                     }
                 }
@@ -325,10 +377,19 @@ fn handle_score(
             }
             broadcasts.send(MessageEvent {
                 game: *game,
-                msg: if *team == 0 { Text::from("Team Blue").color(Color::BLUE) } else { Text::from("Team Red").color(Color::RED) } + Text::from(" scored! (").color(Color::GRAY) + Text::from(score.to_string()).color(Color::GOLD) + Text::from("/5)").color(Color::GRAY),
+                msg: if *team == 0 {
+                    Text::from("Team Blue").color(Color::BLUE)
+                } else {
+                    Text::from("Team Red").color(Color::RED)
+                } + Text::from(" scored! (").color(Color::GRAY)
+                    + Text::from(score.to_string()).color(Color::GOLD)
+                    + Text::from("/5)").color(Color::GRAY),
             });
             if score >= 5 {
-                end_game.send(EndGameEvent { game_id: *game, loser: if *team == 0 { 1 } else { 0 } });
+                end_game.send(EndGameEvent {
+                    game_id: *game,
+                    loser: if *team == 0 { 1 } else { 0 },
+                });
             }
         }
     }
@@ -365,9 +426,7 @@ fn damage_player(
         (victim.pos.0.z - victim.old_pos.get().z) as f32,
     );
 
-    victim
-        .client
-        .set_velocity(old_vel + velocity);
+    victim.client.set_velocity(old_vel + velocity);
 
     attacker.state.has_bonus_knockback = false;
 
