@@ -51,22 +51,35 @@ fn handle_digging_events(
     }
 }
 
-pub struct PlacingPlugin;
+#[derive(Resource)]
+struct PlacingPluginResource {
+    build_limit: isize,
+}
+
+pub struct PlacingPlugin {
+    pub build_limit: isize,
+}
 
 impl Plugin for PlacingPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Update, handle_placing_events);
+        app
+            .insert_resource(PlacingPluginResource {
+                build_limit: self.build_limit,
+            })
+            .add_systems(Update, handle_placing_events);
     }
 }
 
 fn handle_placing_events(
-    mut clients: Query<(&GameMode, &mut Inventory, &HeldItem, &VisibleChunkLayer)>,
+    mut clients: Query<(&GameMode, &Position, &mut Inventory, &HeldItem, &VisibleChunkLayer)>,
     mut layers: Query<&mut ChunkLayer>,
     mut events: EventReader<InteractBlockEvent>,
+    res: Res<PlacingPluginResource>,
 ) {
     for event in events.read() {
-        if let Ok((gamemode, mut inv, held_item, layer)) = clients.get_mut(event.client) {
-            if *gamemode == GameMode::Adventure || *gamemode == GameMode::Spectator || event.hand != Hand::Main {
+        if let Ok((gamemode, pos, mut inv, held_item, layer)) = clients.get_mut(event.client) {
+            let block_pos = event.position.get_in_direction(event.face);
+            if *gamemode == GameMode::Adventure || *gamemode == GameMode::Spectator || event.hand != Hand::Main || block_pos.y as isize > res.build_limit {
                 continue;
             }
             let Ok(mut chunk_layer) = layers.get_mut(layer.0) else {
@@ -78,14 +91,16 @@ fn handle_placing_events(
             }
             let kind = inv.slot(slot).item;
             if let Some(block_kind) = BlockKind::from_item_kind(kind) {
-                let pos = event.position.get_in_direction(event.face);
-                let Some(block) = chunk_layer.block(pos) else {
-                    continue;
-                };
-                if block.state == BlockState::AIR {
-                    chunk_layer.set_block(pos, block_kind.to_state());
-                    let count = inv.slot(slot).count - 1;
-                    inv.set_slot_amount(slot, count);
+                let diff = pos.0 - DVec3::new(block_pos.x as f64 + 0.5, block_pos.y as f64, block_pos.z as f64 + 0.5);
+                if diff.x.abs() > 0.8 || diff.z.abs() > 0.8 || diff.y >= 1.0 {
+                    let Some(block) = chunk_layer.block(block_pos) else {
+                        continue;
+                    };
+                    if block.state.is_replaceable() {
+                        chunk_layer.set_block(block_pos, block_kind.to_state());
+                        let count = inv.slot(slot).count - 1;
+                        inv.set_slot_amount(slot, count);
+                    }
                 }
             }
         }

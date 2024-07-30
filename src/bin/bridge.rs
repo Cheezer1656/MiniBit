@@ -44,13 +44,15 @@ fn main() {
         .add_plugins((
             InvBroadcastPlugin,
             ProjectilePlugin,
-            PlacingPlugin,
             DiggingPlugin {
                 whitelist: vec![
                     BlockKind::BlueTerracotta,
                     BlockKind::RedTerracotta,
                     BlockKind::WhiteTerracotta,
                 ],
+            },
+            PlacingPlugin {
+                build_limit: 100,
             },
         ))
         .add_event::<DeathEvent>()
