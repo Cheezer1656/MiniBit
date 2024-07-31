@@ -57,6 +57,11 @@ pub struct CombatState {
     pub has_bonus_knockback: bool,
 }
 
+#[derive(Component, Default)]
+pub struct ItemUseState {
+    pub start_tick: i64,
+}
+
 #[derive(Event)]
 pub struct StartGameEvent(pub Entity);
 
@@ -188,7 +193,7 @@ pub fn init_clients(
         health.0 = 20.0;
         commands
             .entity(entity)
-            .insert((PlayerGameState::default(), CombatState::default()));
+            .insert((PlayerGameState::default(), CombatState::default(), ItemUseState::default()));
 
         globals.queue.push(entity);
     }
@@ -298,9 +303,9 @@ pub fn start_game(
                 visible_entity_layers.0.insert(entitylayer);
 
                 gamestate.game_id = Some(event.0);
-                gamestate.team = i as u8;
+                gamestate.team = i as u8 % 2;
 
-                let spawn = &config.worlds[map_idx].spawns[gamestate.team as usize];
+                let spawn = &config.worlds[map_idx].spawns[gamestate.team as usize % 2];
                 pos.set(spawn.pos);
                 look.yaw = spawn.rot[0];
                 look.pitch = spawn.rot[1];
@@ -390,7 +395,7 @@ pub fn gameloop(
         if stage.0 < 4 {
             for entity in entities.0.iter() {
                 if let Ok(mut player) = clients.get_mut(*entity) {
-                    let spawn = &config.worlds[map.0].spawns[player.gamestate.team as usize];
+                    let spawn = &config.worlds[map.0].spawns[player.gamestate.team as usize % 2];
                     player.pos.set(spawn.pos);
                     player.look.yaw = spawn.rot[0];
                     player.look.pitch = spawn.rot[1];
