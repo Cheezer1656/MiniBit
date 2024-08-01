@@ -11,7 +11,7 @@ use std::{
 use lib::config::{ConfigLoaderPlugin, WorldValue};
 use serde::Deserialize;
 use valence::{
-    entity::{living::Health, player::PlayerEntityBundle}, event_loop::PacketEvent, inventory::{ClickSlotEvent, HeldItem}, message::{ChatMessageEvent, SendMessage}, nbt::compound, player_list::{DisplayName, Listed, PlayerListEntryBundle}, prelude::*, protocol::{packets::play::PlayerInteractItemC2s, sound::SoundCategory, Sound}
+    entity::{living::Health, player::{PlayerEntityBundle, PlayerModelParts}}, event_loop::PacketEvent, inventory::{ClickSlotEvent, HeldItem}, message::{ChatMessageEvent, SendMessage}, nbt::compound, player_list::{DisplayName, Listed, PlayerListEntryBundle}, prelude::*, protocol::{packets::play::PlayerInteractItemC2s, sound::SoundCategory, Sound}
 };
 use valence_anvil::AnvilLevel;
 
@@ -124,7 +124,7 @@ fn setup(
     let layer_id = commands.spawn((layer, level)).id();
 
     for npc in &config.npcs {
-        let npc_id = UniqueId(Uuid::default());
+        let npc_id = UniqueId::default();
 
         commands.spawn(PlayerEntityBundle {
             layer: EntityLayerId(layer_id),
@@ -132,6 +132,7 @@ fn setup(
             position: Position::new(npc.pos),
             look: Look::new(npc.yaw, npc.pitch),
             head_yaw: HeadYaw(npc.yaw),
+            player_player_model_parts: PlayerModelParts(126),
             ..PlayerEntityBundle::default()
         }).insert(NpcAction {
             command: npc.command.clone(),
@@ -140,7 +141,6 @@ fn setup(
 
         let mut props = Properties::default();
         props.set_skin(npc.skin.clone(), npc.signature.clone());
-        println!("{:?}", props);
 
         commands.spawn(PlayerListEntryBundle {
             uuid: npc_id,
