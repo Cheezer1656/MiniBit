@@ -178,6 +178,8 @@ fn init_clients(
             &mut VisibleChunkLayer,
             &mut VisibleEntityLayers,
             &mut Position,
+            &mut Look,
+            &mut HeadYaw,
             &mut GameMode,
             &mut Health,
             &mut Inventory,
@@ -192,6 +194,8 @@ fn init_clients(
         mut visible_chunk_layer,
         mut visible_entity_layers,
         mut pos,
+        mut look,
+        mut head_yaw,
         mut game_mode,
         mut health,
         mut inv,
@@ -203,6 +207,9 @@ fn init_clients(
         visible_chunk_layer.0 = layer;
         visible_entity_layers.0.insert(layer);
         pos.set(config.world.spawns[0].pos);
+        look.yaw = config.world.spawns[0].rot[0];
+        look.pitch = config.world.spawns[0].rot[1];
+        head_yaw.0 = config.world.spawns[0].rot[0];
         *game_mode = GameMode::Adventure;
         health.0 = 20.0;
 

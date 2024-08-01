@@ -104,7 +104,6 @@ fn init_clients(
     mut clients: Query<
         (
             Entity,
-            &mut Client,
             &mut VisibleChunkLayer,
             &mut VisibleEntityLayers,
             &mut IsFlat,
@@ -119,7 +118,6 @@ fn init_clients(
 ) {
     for (
         entity,
-        mut client,
         mut visible_chunk_layer,
         mut visible_entity_layers,
         mut is_flat,
@@ -130,8 +128,6 @@ fn init_clients(
         visible_entity_layers.0.insert(entity);
         is_flat.0 = true;
         *game_mode = GameMode::Spectator;
-
-        client.send_chat_message("Welcome to train chase!".italic());
 
         let puppet_id = UniqueId::default();
         let puppet_entity_id = commands
