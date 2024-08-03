@@ -58,6 +58,9 @@ struct MessageEvent {
     msg: Text,
 }
 
+#[derive(Component)]
+struct EatingStartTick(pub i64);
+
 fn main() {
     App::new()
         .add_plugins(DuelsPlugin {
@@ -83,6 +86,7 @@ fn main() {
         .add_systems(
             Update,
             (
+                init_clients,
                 start_game.after(lib::duels::start_game),
                 gamestage_change,
                 end_game,
@@ -98,6 +102,12 @@ fn main() {
             ),
         )
         .run();
+}
+
+fn init_clients(clients: Query<Entity, Added<Client>>, mut commands: Commands) {
+    for entity in clients.iter() {
+        commands.entity(entity).insert(EatingStartTick(i64::MAX));
+    }
 }
 
 fn start_game(
@@ -218,15 +228,15 @@ fn check_goals(
 }
 
 fn set_use_tick(
-    mut clients: Query<(&Inventory, &HeldItem, &mut ItemUseState), With<Client>>,
+    mut clients: Query<(&Inventory, &HeldItem, &mut EatingStartTick), With<Client>>,
     mut events: EventReader<InteractItemEvent>,
     server: Res<Server>,
 ) {
     for event in events.read() {
-        if let Ok((inv, held_item, mut usestate)) = clients.get_mut(event.client) {
+        if let Ok((inv, held_item, mut eat_tick)) = clients.get_mut(event.client) {
             if event.hand == Hand::Main {
                 if inv.slot(held_item.slot()).item == ItemKind::GoldenApple {
-                    usestate.start_tick = server.current_tick();
+                    eat_tick.0 = server.current_tick();
                 }
             }
         }
@@ -241,21 +251,22 @@ fn eat_gapple(
             &mut Absorption,
             &mut Inventory,
             &HeldItem,
-            &mut ItemUseState,
+            &mut EatingStartTick,
         ),
         With<Client>,
     >,
     server: Res<Server>,
 ) {
-    for (mut client, mut health, mut absorption, mut inv, held_item, mut usestate) in
+    for (mut client, mut health, mut absorption, mut inv, held_item, mut eat_tick) in
         clients.iter_mut()
     {
         let slot = held_item.slot();
         if inv.slot(slot).item != ItemKind::GoldenApple {
-            usestate.start_tick = i64::MAX;
+            eat_tick.0 = i64::MAX;
             continue;
         }
-        if server.current_tick() - usestate.start_tick > 32 {
+        if server.current_tick() - eat_tick.0 > 32 {
+            eat_tick.0 = i64::MAX;
             client.trigger_status(EntityStatus::ConsumeItem);
             health.0 = 20.0;
             absorption.0 = 4.0;
@@ -266,14 +277,16 @@ fn eat_gapple(
 }
 
 fn cancel_gapple(
-    mut clients: Query<&mut ItemUseState, With<Client>>,
+    mut clients: Query<(&Inventory, &HeldItem, &mut EatingStartTick), With<Client>>,
     mut packets: EventReader<PacketEvent>,
 ) {
     for packet in packets.read() {
         if let Some(pkt) = packet.decode::<PlayerActionC2s>() {
             if pkt.action == PlayerAction::ReleaseUseItem {
-                if let Ok(mut usestate) = clients.get_mut(packet.client) {
-                    usestate.start_tick = i64::MAX;
+                if let Ok((inv, held_item, mut eat_tick)) = clients.get_mut(packet.client) {
+                    if inv.slot(held_item.slot()).item == ItemKind::GoldenApple {
+                        eat_tick.0 = i64::MAX;
+                    }
                 }
             }
         }

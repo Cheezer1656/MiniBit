@@ -75,17 +75,6 @@ pub struct CombatState {
     pub has_bonus_knockback: bool,
 }
 
-#[derive(Component)]
-pub struct ItemUseState {
-    pub start_tick: i64,
-}
-
-impl Default for ItemUseState {
-    fn default() -> Self {
-        Self { start_tick: i64::MAX }
-    }
-}
-
 #[derive(Event)]
 pub struct StartGameEvent(pub Entity);
 
@@ -217,7 +206,7 @@ pub fn init_clients(
         health.0 = 20.0;
         commands
             .entity(entity)
-            .insert((PlayerGameState::default(), CombatState::default(), ItemUseState::default()));
+            .insert((PlayerGameState::default(), CombatState::default()));
 
         globals.queue.push(entity);
     }

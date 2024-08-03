@@ -22,7 +22,8 @@ use bevy_ecs::query::QueryData;
 use parry3d::{math::Vector, na::{self, Isometry3}, query::{cast_shapes, ShapeCastOptions}, shape::Cuboid};
 use valence::{entity::{arrow::{ArrowEntity, ArrowEntityBundle}, Velocity}, event_loop::PacketEvent, interact_item::InteractItemEvent, inventory::{HeldItem, PlayerAction}, prelude::*, protocol::{packets::play::PlayerActionC2s, sound::SoundCategory, Sound}};
 
-use super::duels::ItemUseState;
+#[derive(Component)]
+struct BowDrawTick(pub i64);
 
 #[derive(Component)]
 pub struct ProjectileOwner(pub Entity);
@@ -40,20 +41,26 @@ impl Plugin for ProjectilePlugin {
         app
             .add_event::<ProjectileCollisionEvent>()
             .add_systems(EventLoopUpdate, (set_use_tick, handle_player_actions))
-            .add_systems(Update, (apply_arrow_physics, cleanup_arrows));
+            .add_systems(Update, (init_clients, apply_arrow_physics, cleanup_arrows));
+    }
+}
+
+fn init_clients(clients: Query<Entity, Added<Client>>, mut commands: Commands) {
+    for entity in clients.iter() {
+        commands.entity(entity).insert(BowDrawTick(i64::MAX));
     }
 }
 
 fn set_use_tick(
-    mut clients: Query<(&Inventory, &HeldItem, &mut ItemUseState), With<Client>>,
+    mut clients: Query<(&Inventory, &HeldItem, &mut BowDrawTick), With<Client>>,
     mut events: EventReader<InteractItemEvent>,
     server: Res<Server>,
 ) {
     for event in events.read() {
-        if let Ok((inv, held_item, mut usestate)) = clients.get_mut(event.client) {
+        if let Ok((inv, held_item, mut draw_tick)) = clients.get_mut(event.client) {
             if event.hand == Hand::Main {
                 if inv.slot(held_item.slot()).item == ItemKind::Bow {
-                    usestate.start_tick = server.current_tick();
+                    draw_tick.0 = server.current_tick();
                 }
             }
         }
@@ -70,7 +77,7 @@ struct ActionQuery {
     look: &'static Look,
     yaw: &'static HeadYaw,
     layer: &'static EntityLayerId,
-    usestate: &'static mut ItemUseState,
+    draw_tick: &'static mut BowDrawTick,
 }
 fn handle_player_actions(
     mut players: Query<ActionQuery>,
@@ -116,7 +123,7 @@ fn handle_player_actions(
                     x / mag,
                     y / mag,
                     z / mag,
-                ) * (server.current_tick() - player.usestate.start_tick).clamp(0, 20) as f32 * 3.0;
+                ) * (server.current_tick() - player.draw_tick.0).clamp(0, 20) as f32 * 3.0;
                 let dir = vel.normalize().as_dvec3() * 0.5;
                 let arrow_id = commands
                     .spawn(ArrowEntityBundle {
@@ -136,7 +143,7 @@ fn handle_player_actions(
                     .entity(arrow_id)
                     .insert(ProjectileOwner(player.entity));
 
-                player.usestate.start_tick = 0;
+                player.draw_tick.0 = i64::MAX;
             }
         }
     }
