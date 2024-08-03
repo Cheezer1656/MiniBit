@@ -36,7 +36,7 @@ use valence::protocol::WritePacket;
 
 fn main() {
     App::new()
-        .add_plugins(DuelsPlugin { default_gamemode: GameMode::Adventure })
+        .add_plugins(DuelsPlugin { default_gamemode: GameMode::Adventure, copy_map: false })
         .add_plugins(DefaultPlugins)
         .add_plugins(ProjectilePlugin)
         .add_systems(
@@ -47,7 +47,7 @@ fn main() {
             Update,
             (
                 gamestage_change.after(lib::duels::gameloop),
-                end_game.after(lib::duels::end_game),
+                end_game.after(lib::duels::map::end_game),
                 handle_collision_events,
                 handle_oob_clients,
             ),

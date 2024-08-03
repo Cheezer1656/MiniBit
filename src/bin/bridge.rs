@@ -65,6 +65,7 @@ fn main() {
     App::new()
         .add_plugins(DuelsPlugin {
             default_gamemode: GameMode::Survival,
+            copy_map: true,
         })
         .add_plugins(DefaultPlugins)
         .add_plugins((
@@ -87,7 +88,7 @@ fn main() {
             Update,
             (
                 init_clients,
-                start_game.after(lib::duels::start_game),
+                start_game,
                 gamestage_change,
                 end_game,
                 check_goals,

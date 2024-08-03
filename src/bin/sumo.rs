@@ -33,7 +33,7 @@ use valence::protocol::VarInt;
 
 fn main() {
     App::new()
-        .add_plugins(DuelsPlugin { default_gamemode: GameMode::Adventure })
+        .add_plugins(DuelsPlugin { default_gamemode: GameMode::Adventure, copy_map: false })
         .add_plugins(DefaultPlugins)
         .add_systems(EventLoopUpdate, handle_combat_events)
         .add_systems(Update, handle_oob_clients)
