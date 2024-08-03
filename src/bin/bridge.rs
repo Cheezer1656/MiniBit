@@ -21,7 +21,7 @@
 #[path = "../lib/mod.rs"]
 mod lib;
 
-use bevy_ecs::query::WorldQuery;
+use bevy_ecs::query::QueryData;
 use lib::duels::*;
 use lib::player::*;
 use lib::projectiles::*;
@@ -184,11 +184,15 @@ fn check_goals(
                 let z = pos.0.z.floor() as isize;
                 if data[0] <= x && data[1] >= x && y == data[2] && data[3] <= z && data[4] >= z {
                     match gamestate.team {
-                        1 => scores.send(ScoreEvent {
-                            game: game_id,
-                            team: 1,
-                        }),
-                        _ => deaths.send(DeathEvent(entity, true)),
+                        1 => {
+                            scores.send(ScoreEvent {
+                                game: game_id,
+                                team: 1,
+                            });
+                        }
+                        _ => {
+                            deaths.send(DeathEvent(entity, true));
+                        }
                     }
                 } else if data[5] <= x
                     && data[6] >= x
@@ -197,11 +201,15 @@ fn check_goals(
                     && data[9] >= z
                 {
                     match gamestate.team {
-                        0 => scores.send(ScoreEvent {
-                            game: game_id,
-                            team: 0,
-                        }),
-                        _ => deaths.send(DeathEvent(entity, true)),
+                        0 => {
+                            scores.send(ScoreEvent {
+                                game: game_id,
+                                team: 0,
+                            });
+                        }
+                        _ => {
+                            deaths.send(DeathEvent(entity, true));
+                        }
                     }
                 }
             }
@@ -239,7 +247,9 @@ fn eat_gapple(
     >,
     server: Res<Server>,
 ) {
-    for (mut client, mut health, mut absorption, mut inv, held_item, mut usestate) in clients.iter_mut() {
+    for (mut client, mut health, mut absorption, mut inv, held_item, mut usestate) in
+        clients.iter_mut()
+    {
         let slot = held_item.slot();
         if inv.slot(slot).item != ItemKind::GoldenApple {
             usestate.start_tick = i64::MAX;
@@ -270,8 +280,8 @@ fn cancel_gapple(
     }
 }
 
-#[derive(WorldQuery)]
-#[world_query(mutable)]
+#[derive(QueryData)]
+#[query_data(mutable)]
 struct CombatQuery {
     entity: Entity,
     client: &'static mut Client,

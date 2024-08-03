@@ -18,7 +18,7 @@
 
 #![allow(dead_code)]
 
-use bevy_ecs::query::WorldQuery;
+use bevy_ecs::query::QueryData;
 use serde::Deserialize;
 use std::{collections::HashMap, i64, marker::PhantomData, time::SystemTime};
 use valence::{
@@ -399,8 +399,8 @@ pub fn end_game(
     }
 }
 
-#[derive(WorldQuery)]
-#[world_query(mutable)]
+#[derive(QueryData)]
+#[query_data(mutable)]
 pub struct GameQuery {
     client: &'static mut Client,
     gamestate: &'static PlayerGameState,

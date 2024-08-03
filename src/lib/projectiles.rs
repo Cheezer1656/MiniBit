@@ -18,7 +18,7 @@
 
 #![allow(dead_code)]
 
-use bevy_ecs::query::WorldQuery;
+use bevy_ecs::query::QueryData;
 use parry3d::{math::Vector, na::{self, Isometry3}, query::{cast_shapes, ShapeCastOptions}, shape::Cuboid};
 use valence::{entity::{arrow::{ArrowEntity, ArrowEntityBundle}, Velocity}, event_loop::PacketEvent, interact_item::InteractItemEvent, inventory::{HeldItem, PlayerAction}, prelude::*, protocol::{packets::play::PlayerActionC2s, sound::SoundCategory, Sound}};
 
@@ -60,8 +60,8 @@ fn set_use_tick(
     }
 }
 
-#[derive(WorldQuery)]
-#[world_query(mutable)]
+#[derive(QueryData)]
+#[query_data(mutable)]
 struct ActionQuery {
     entity: Entity,
     held_item: &'static HeldItem,

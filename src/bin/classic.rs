@@ -21,7 +21,7 @@
 #[path = "../lib/mod.rs"]
 mod lib;
 
-use bevy_ecs::query::WorldQuery;
+use bevy_ecs::query::QueryData;
 use lib::duels::{CombatState, DuelsPlugin, EndGameEvent, Entities, PlayerGameState, StartGameEvent};
 use valence::entity::living::Health;
 use valence::entity::Velocity;
@@ -77,8 +77,8 @@ fn end_game(
     }
 }
 
-#[derive(WorldQuery)]
-#[world_query(mutable)]
+#[derive(QueryData)]
+#[query_data(mutable)]
 struct CombatQuery {
     client: &'static mut Client,
     id: &'static EntityId,

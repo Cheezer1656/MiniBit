@@ -343,7 +343,7 @@ fn handle_slot_click(
                     entity: event.client,
                     action: config.npcs[event.slot_id as usize].command.clone(),
                     args: config.npcs[event.slot_id as usize].args.clone(),
-                })
+                });
             }
         }
     }
