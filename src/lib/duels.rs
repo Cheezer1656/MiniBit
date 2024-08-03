@@ -20,7 +20,7 @@
 
 use bevy_ecs::query::WorldQuery;
 use serde::Deserialize;
-use std::{collections::HashMap, marker::PhantomData, time::SystemTime};
+use std::{collections::HashMap, i64, marker::PhantomData, time::SystemTime};
 use valence::{
     entity::living::Health,
     message::ChatMessageEvent,
@@ -75,9 +75,15 @@ pub struct CombatState {
     pub has_bonus_knockback: bool,
 }
 
-#[derive(Component, Default)]
+#[derive(Component)]
 pub struct ItemUseState {
     pub start_tick: i64,
+}
+
+impl Default for ItemUseState {
+    fn default() -> Self {
+        Self { start_tick: i64::MAX }
+    }
 }
 
 #[derive(Event)]

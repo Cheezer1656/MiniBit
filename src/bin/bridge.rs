@@ -30,6 +30,7 @@ use valence::entity::living::Absorption;
 use valence::entity::living::Health;
 use valence::entity::{EntityId, EntityStatuses};
 use valence::event_loop::PacketEvent;
+use valence::interact_item::InteractItemEvent;
 use valence::inventory::HeldItem;
 use valence::inventory::PlayerAction;
 use valence::math::Vec3Swizzles;
@@ -73,9 +74,7 @@ fn main() {
                     BlockKind::WhiteTerracotta,
                 ],
             },
-            PlacingPlugin {
-                build_limit: 100,
-            },
+            PlacingPlugin { build_limit: 100 },
         ))
         .add_event::<DeathEvent>()
         .add_event::<ScoreEvent>()
@@ -88,7 +87,9 @@ fn main() {
                 gamestage_change,
                 end_game,
                 check_goals,
+                set_use_tick,
                 eat_gapple,
+                cancel_gapple,
                 handle_collision_events,
                 handle_death,
                 handle_score.after(check_goals).before(handle_death),
@@ -208,23 +209,63 @@ fn check_goals(
     }
 }
 
-fn eat_gapple(
-    mut clients: Query<(&mut Health, &mut Absorption, &mut Inventory, &HeldItem), With<Client>>,
-    mut packets: EventReader<PacketEvent>,
+fn set_use_tick(
+    mut clients: Query<(&Inventory, &HeldItem, &mut ItemUseState), With<Client>>,
+    mut events: EventReader<InteractItemEvent>,
+    server: Res<Server>,
 ) {
-    for packet in packets.read() {
-        let Some(pkt) = packet.decode::<PlayerActionC2s>() else {
-            continue;
-        };
-        let Ok((mut health, mut absorption, mut inv, held_item)) = clients.get_mut(packet.client) else {
-            continue;
-        };
+    for event in events.read() {
+        if let Ok((inv, held_item, mut usestate)) = clients.get_mut(event.client) {
+            if event.hand == Hand::Main {
+                if inv.slot(held_item.slot()).item == ItemKind::GoldenApple {
+                    usestate.start_tick = server.current_tick();
+                }
+            }
+        }
+    }
+}
+
+fn eat_gapple(
+    mut clients: Query<
+        (
+            &mut Client,
+            &mut Health,
+            &mut Absorption,
+            &mut Inventory,
+            &HeldItem,
+            &mut ItemUseState,
+        ),
+        With<Client>,
+    >,
+    server: Res<Server>,
+) {
+    for (mut client, mut health, mut absorption, mut inv, held_item, mut usestate) in clients.iter_mut() {
         let slot = held_item.slot();
-        if pkt.action == PlayerAction::ReleaseUseItem && inv.slot(slot).item == ItemKind::GoldenApple {
+        if inv.slot(slot).item != ItemKind::GoldenApple {
+            usestate.start_tick = i64::MAX;
+            continue;
+        }
+        if server.current_tick() - usestate.start_tick > 32 {
+            client.trigger_status(EntityStatus::ConsumeItem);
             health.0 = 20.0;
             absorption.0 = 4.0;
             let count = inv.slot(slot).count;
             inv.set_slot_amount(held_item.slot(), count - 1);
+        }
+    }
+}
+
+fn cancel_gapple(
+    mut clients: Query<&mut ItemUseState, With<Client>>,
+    mut packets: EventReader<PacketEvent>,
+) {
+    for packet in packets.read() {
+        if let Some(pkt) = packet.decode::<PlayerActionC2s>() {
+            if pkt.action == PlayerAction::ReleaseUseItem {
+                if let Ok(mut usestate) = clients.get_mut(packet.client) {
+                    usestate.start_tick = i64::MAX;
+                }
+            }
         }
     }
 }
