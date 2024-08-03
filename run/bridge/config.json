@@ -13,8 +13,8 @@
         },
         {
             "path": "../worlds/bridge1",
-            "x_chunks": [-1, 1],
-            "z_chunks": [-3, 2],
+            "x_chunks": [-2, 1],
+            "z_chunks": [-4, 3],
             "spawns": [
                 {
                     "pos": [0.5, 97.0, 29.5],
