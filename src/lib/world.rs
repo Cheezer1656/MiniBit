@@ -16,7 +16,9 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-use valence::{interact_block::InteractBlockEvent, inventory::HeldItem, math::IVec3, prelude::*};
+use std::borrow::Cow;
+
+use valence::{interact_block::InteractBlockEvent, inventory::{ClientInventoryState, HeldItem}, math::IVec3, prelude::*, protocol::{packets::play::InventoryS2c, VarInt, WritePacket}};
 
 #[derive(Resource)]
 struct DiggingPluginResource {
@@ -98,31 +100,59 @@ impl Plugin for PlacingPlugin {
     }
 }
 
+fn resync_inv(
+    client: &mut Client,
+    client_inv: &Inventory,
+    inv_state: &ClientInventoryState,
+    cursor_item: &CursorItem,
+) {
+    client.write_packet(&InventoryS2c {
+        window_id: 0,
+        state_id: VarInt(inv_state.state_id().0),
+        slots: Cow::Borrowed(client_inv.slot_slice()),
+        carried_item: Cow::Borrowed(&cursor_item.0),
+    });
+}
+
+// TODO: Nest the loops and if statements so that you only need to call resync_inv once
 fn handle_placing_events(
-    mut clients: Query<(&GameMode, &Position, &mut Inventory, &HeldItem, &VisibleChunkLayer)>,
+    mut clients: Query<(
+        &mut Client,
+        &GameMode,
+        &Position,
+        &mut Inventory,
+        &ClientInventoryState,
+        &CursorItem,
+        &HeldItem,
+        &VisibleChunkLayer,
+    )>,
     mut layers: Query<&mut ChunkLayer>,
     mut events: EventReader<InteractBlockEvent>,
     restrictions: Option<Res<PlacingRestrictions>>,
     res: Res<PlacingPluginResource>,
 ) {
     'outer: for event in events.read() {
-        if let Ok((gamemode, pos, mut inv, held_item, layer)) = clients.get_mut(event.client) {
+        if let Ok((mut client, gamemode, pos, mut inv, inv_state, cursor_item, held_item, layer)) = clients.get_mut(event.client) {
             let block_pos = event.position.get_in_direction(event.face);
             if *gamemode == GameMode::Adventure || *gamemode == GameMode::Spectator || event.hand != Hand::Main || block_pos.y as isize > res.build_limit {
+                resync_inv(&mut client, &inv, inv_state, cursor_item);
                 continue;
             }
             if let Some(restrictions) = &restrictions {
                 for area in restrictions.areas.iter() {
                     if block_pos.x >= area.min.x && block_pos.x <= area.max.x && block_pos.y >= area.min.y && block_pos.y <= area.max.y && block_pos.z >= area.min.z && block_pos.z <= area.max.z {
+                        resync_inv(&mut client, &inv, inv_state, cursor_item);
                         continue 'outer;
                     }
                 }
             }
             let Ok(mut chunk_layer) = layers.get_mut(layer.0) else {
+                resync_inv(&mut client, &inv, inv_state, cursor_item);
                 continue;
             };
             let slot = held_item.slot();
             if inv.slot(slot).count == 0 {
+                resync_inv(&mut client, &inv, inv_state, cursor_item);
                 continue;
             }
             let kind = inv.slot(slot).item;
@@ -130,12 +160,15 @@ fn handle_placing_events(
                 let diff = pos.0 - DVec3::new(block_pos.x as f64 + 0.5, block_pos.y as f64, block_pos.z as f64 + 0.5);
                 if diff.x.abs() > 0.8 || diff.z.abs() > 0.8 || diff.y >= 1.0 || diff.y <= -2.0 {
                     let Some(block) = chunk_layer.block(block_pos) else {
+                        resync_inv(&mut client, &inv, inv_state, cursor_item);
                         continue;
-                    };
+                    }; 
                     if block.state.is_replaceable() {
                         chunk_layer.set_block(block_pos, block_kind.to_state());
                         let count = inv.slot(slot).count - 1;
                         inv.set_slot_amount(slot, count);
+                    } else {
+                        resync_inv(&mut client, &inv, inv_state, cursor_item);
                     }
                 }
             }
