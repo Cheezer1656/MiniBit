@@ -149,7 +149,8 @@ fn gamestage_change(
         match event.stage {
             0 | 2 => { // For some reason the blocks are overwritten at the start of the game, so we need to reapply them
                 for i in 0..2 {
-                    let spawn_pos = DVec3::from_array(server_config.worlds[map_idx.0].spawns[i].pos);
+                    let spawn_pos =
+                        DVec3::from_array(server_config.worlds[map_idx.0].spawns[i].pos);
                     // Create the cage
                     for x in -2..=2 {
                         for y in -1..=3 {
@@ -168,7 +169,8 @@ fn gamestage_change(
             4 => {
                 // Clear the cages
                 for i in 0..2 {
-                    let spawn_pos = DVec3::from_array(server_config.worlds[map_idx.0].spawns[i].pos);
+                    let spawn_pos =
+                        DVec3::from_array(server_config.worlds[map_idx.0].spawns[i].pos);
                     for x in -2..=2 {
                         for y in -1..=3 {
                             for z in -2..=2 {
@@ -246,10 +248,17 @@ fn check_goals(
     for (entity, pos, gamestate) in clients.iter() {
         if let Some(game_id) = gamestate.game_id {
             if let Some(data) = &config.other {
-                let x = pos.0.x.floor() as isize;
-                let y = pos.0.y.floor() as isize;
-                let z = pos.0.z.floor() as isize;
-                if data[0] <= x && data[1] >= x && y == data[2] && data[3] <= z && data[4] >= z {
+                let goal1 = &data["goal1"];
+                let goal2 = &data["goal2"];
+                let x = pos.0.x.floor();
+                let y = pos.0.y.floor();
+                let z = pos.0.z.floor();
+                if goal1[0].as_f64() <= Some(x)
+                    && goal1[1].as_f64() >= Some(x)
+                    && goal1[2].as_f64() == Some(y)
+                    && goal1[3].as_f64() <= Some(z)
+                    && goal1[4].as_f64() >= Some(z)
+                {
                     match gamestate.team {
                         1 => {
                             scores.send(ScoreEvent {
@@ -261,11 +270,11 @@ fn check_goals(
                             deaths.send(DeathEvent(entity, true));
                         }
                     }
-                } else if data[5] <= x
-                    && data[6] >= x
-                    && y == data[7]
-                    && data[8] <= z
-                    && data[9] >= z
+                } else if goal2[0].as_f64() <= Some(x)
+                    && goal2[1].as_f64() >= Some(x)
+                    && goal2[2].as_f64() == Some(y)
+                    && goal2[3].as_f64() <= Some(z)
+                    && goal2[4].as_f64() >= Some(z)
                 {
                     match gamestate.team {
                         0 => {

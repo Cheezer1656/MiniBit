@@ -23,6 +23,7 @@ pub mod copied_map;
 
 use bevy_ecs::query::QueryData;
 use serde::Deserialize;
+use serde_json::Value;
 use std::{collections::HashMap, i64, marker::PhantomData, time::SystemTime};
 use valence::{
     entity::living::Health,
@@ -95,7 +96,7 @@ pub struct GameSettings {
 #[derive(Resource, Deserialize)]
 pub struct DuelsConfig {
     pub worlds: Vec<WorldValue>,
-    pub other: Option<Vec<isize>>,
+    pub other: Option<Value>,
 }
 
 pub struct DuelsPlugin {
