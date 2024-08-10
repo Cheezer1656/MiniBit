@@ -405,7 +405,7 @@ fn handle_oob_clients(
     mut deaths: EventWriter<DeathEvent>,
 ) {
     for (entity, pos, gamestate) in positions.iter() {
-        if pos.0.y < 0.0 {
+        if pos.0.y < 75.0 {
             if gamestate.game_id.is_some() {
                 deaths.send(DeathEvent(entity, true));
             }

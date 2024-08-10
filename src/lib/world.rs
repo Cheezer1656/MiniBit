@@ -110,7 +110,7 @@ fn handle_placing_events(
             let kind = inv.slot(slot).item;
             if let Some(block_kind) = BlockKind::from_item_kind(kind) {
                 let diff = pos.0 - DVec3::new(block_pos.x as f64 + 0.5, block_pos.y as f64, block_pos.z as f64 + 0.5);
-                if diff.x.abs() > 0.8 || diff.z.abs() > 0.8 || diff.y >= 1.0 {
+                if diff.x.abs() > 0.8 || diff.z.abs() > 0.8 || diff.y >= 1.0 || diff.y <= -2.0 {
                     let Some(block) = chunk_layer.block(block_pos) else {
                         continue;
                     };

@@ -119,11 +119,17 @@ fn handle_player_actions(
 
                 let mag = (x * x + y * y + z * z).sqrt();
 
+                let tick_diff = server.current_tick() - player.draw_tick.0;
+
+                if tick_diff < 5 {
+                    continue;
+                }
+
                 let vel = Vec3::new(
                     x / mag,
                     y / mag,
                     z / mag,
-                ) * (server.current_tick() - player.draw_tick.0).clamp(0, 20) as f32 * 3.0;
+                ) * tick_diff.clamp(0, 20) as f32 * 3.0;
                 let dir = vel.normalize().as_dvec3() * 0.5;
                 let arrow_id = commands
                     .spawn(ArrowEntityBundle {
