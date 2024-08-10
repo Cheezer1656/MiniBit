@@ -16,7 +16,7 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-use valence::{interact_block::InteractBlockEvent, inventory::HeldItem, prelude::*};
+use valence::{interact_block::InteractBlockEvent, inventory::HeldItem, math::IVec3, prelude::*};
 
 #[derive(Resource)]
 struct DiggingPluginResource {
@@ -69,6 +69,16 @@ fn handle_digging_events(
     }
 }
 
+pub struct BlockArea {
+    pub min: IVec3,
+    pub max: IVec3,
+}
+
+#[derive(Resource)]
+pub struct PlacingRestrictions {
+    pub areas: Vec<BlockArea>,
+}
+
 #[derive(Resource)]
 struct PlacingPluginResource {
     build_limit: isize,
@@ -92,13 +102,21 @@ fn handle_placing_events(
     mut clients: Query<(&GameMode, &Position, &mut Inventory, &HeldItem, &VisibleChunkLayer)>,
     mut layers: Query<&mut ChunkLayer>,
     mut events: EventReader<InteractBlockEvent>,
+    restrictions: Option<Res<PlacingRestrictions>>,
     res: Res<PlacingPluginResource>,
 ) {
-    for event in events.read() {
+    'outer: for event in events.read() {
         if let Ok((gamemode, pos, mut inv, held_item, layer)) = clients.get_mut(event.client) {
             let block_pos = event.position.get_in_direction(event.face);
             if *gamemode == GameMode::Adventure || *gamemode == GameMode::Spectator || event.hand != Hand::Main || block_pos.y as isize > res.build_limit {
                 continue;
+            }
+            if let Some(restrictions) = &restrictions {
+                for area in restrictions.areas.iter() {
+                    if block_pos.x >= area.min.x && block_pos.x <= area.max.x && block_pos.y >= area.min.y && block_pos.y <= area.max.y && block_pos.z >= area.min.z && block_pos.z <= area.max.z {
+                        continue 'outer;
+                    }
+                }
             }
             let Ok(mut chunk_layer) = layers.get_mut(layer.0) else {
                 continue;

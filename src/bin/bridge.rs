@@ -35,6 +35,7 @@ use valence::event_loop::PacketEvent;
 use valence::interact_item::InteractItemEvent;
 use valence::inventory::HeldItem;
 use valence::inventory::PlayerAction;
+use valence::math::IVec3;
 use valence::math::Vec3Swizzles;
 use valence::nbt::compound;
 use valence::prelude::*;
@@ -85,6 +86,7 @@ fn main() {
         .add_event::<DeathEvent>()
         .add_event::<ScoreEvent>()
         .add_event::<MessageEvent>()
+        .add_systems(Startup, setup)
         .add_systems(EventLoopUpdate, handle_combat_events)
         .add_systems(
             Update,
@@ -105,6 +107,33 @@ fn main() {
             ),
         )
         .run();
+}
+
+fn setup(mut commands: Commands, server_config: Res<DuelsConfig>) {
+    if let Some(data) = &server_config.other {
+        if let Some(restrictions) = data["block_restrictions"].as_array() {
+            let mut areas = Vec::with_capacity(restrictions.len());
+            for restriction in restrictions {
+                if let Some(restriction) = restriction.as_array() {
+                    if restriction.len() == 6 {
+                        areas.push(BlockArea {
+                            min: IVec3::new(
+                                restriction[0].as_i64().unwrap() as i32,
+                                restriction[1].as_i64().unwrap() as i32,
+                                restriction[2].as_i64().unwrap() as i32,
+                            ),
+                            max: IVec3::new(
+                                restriction[3].as_i64().unwrap() as i32,
+                                restriction[4].as_i64().unwrap() as i32,
+                                restriction[5].as_i64().unwrap() as i32,
+                            ),
+                        });
+                    }
+                }
+            }
+            commands.insert_resource(PlacingRestrictions { areas });
+        }
+    }
 }
 
 fn init_clients(clients: Query<Entity, Added<Client>>, mut commands: Commands) {
