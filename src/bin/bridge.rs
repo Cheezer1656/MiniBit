@@ -21,6 +21,8 @@
 #[path = "../lib/mod.rs"]
 mod lib;
 
+use std::time::SystemTime;
+
 use bevy_ecs::query::QueryData;
 use lib::duels::*;
 use lib::player::*;
@@ -126,6 +128,60 @@ fn start_game(
                     fill_inventory(&mut inventory, gamestate.team);
                 }
             }
+        }
+    }
+}
+
+fn gamestage_change(
+    mut layers: Query<&mut ChunkLayer>,
+    games: Query<(&MapIndex, &EntityLayerId)>,
+    server_config: Res<DuelsConfig>,
+    mut gamestage: EventReader<GameStageEvent>,
+) {
+    for event in gamestage.read() {
+        let Ok((map_idx, layer_id)) = games.get(event.game_id) else {
+            continue;
+        };
+        let Ok(mut layer) = layers.get_mut(layer_id.0) else {
+            continue;
+        };
+
+        match event.stage {
+            0 | 2 => { // For some reason the blocks are overwritten at the start of the game, so we need to reapply them
+                for i in 0..2 {
+                    let spawn_pos = DVec3::from_array(server_config.worlds[map_idx.0].spawns[i].pos);
+                    // Create the cage
+                    for x in -2..=2 {
+                        for y in -1..=3 {
+                            for z in -2..=2 {
+                                if x < -1 || x > 1 || y < 0 || y > 2 || z < -1 || z > 1 {
+                                    layer.set_block(
+                                        spawn_pos + DVec3::new(x as f64, y as f64, z as f64),
+                                        BlockState::GLASS,
+                                    );
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            4 => {
+                // Clear the cages
+                for i in 0..2 {
+                    let spawn_pos = DVec3::from_array(server_config.worlds[map_idx.0].spawns[i].pos);
+                    for x in -2..=2 {
+                        for y in -1..=3 {
+                            for z in -2..=2 {
+                                layer.set_block(
+                                    spawn_pos + DVec3::new(x as f64, y as f64, z as f64),
+                                    BlockState::AIR,
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+            _ => {}
         }
     }
 }
@@ -474,14 +530,15 @@ fn handle_death(
 }
 
 fn handle_score(
-    mut games: Query<(&Entities, &mut GameData)>,
+    mut games: Query<(&Entities, &mut GameStage, &mut GameTime, &mut GameData)>,
     mut scores: EventReader<ScoreEvent>,
     mut deaths: EventWriter<DeathEvent>,
     mut broadcasts: EventWriter<MessageEvent>,
+    mut gamestage: EventWriter<GameStageEvent>,
     mut end_game: EventWriter<EndGameEvent>,
 ) {
     for ScoreEvent { game, team } in scores.read() {
-        if let Ok((entities, mut data)) = games.get_mut(*game) {
+        if let Ok((entities, mut stage, mut time, mut data)) = games.get_mut(*game) {
             let mut score = 0;
             if let Some(DataValue::Int(old_score)) = data.0.get(&(*team as usize)) {
                 score = *old_score + 1;
@@ -504,6 +561,13 @@ fn handle_score(
                 end_game.send(EndGameEvent {
                     game_id: *game,
                     loser: if *team == 0 { 1 } else { 0 },
+                });
+            } else {
+                time.0 = SystemTime::now(); // TODO: Replace with a better solution because the game time is not supposed to keep track of the entire game duration
+                stage.0 = 0;
+                gamestage.send(GameStageEvent {
+                    game_id: *game,
+                    stage: 0,
                 });
             }
         }

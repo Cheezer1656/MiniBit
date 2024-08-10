@@ -119,6 +119,7 @@ impl Plugin for DuelsPlugin {
             Update,
             (
                 despawn_disconnected_clients,
+                start_game,
                 gamestage_change.after(gameloop),
                 chat_message,
             ),
@@ -158,6 +159,18 @@ pub fn handle_disconnect(
                 loser: dc_gamestate.team,
             });
         }
+    }
+}
+
+pub fn start_game(
+    mut start_game: EventReader<StartGameEvent>,
+    mut gamestage: EventWriter<GameStageEvent>,
+) {
+    for event in start_game.read() {
+        gamestage.send(GameStageEvent {
+            game_id: event.0,
+            stage: 0,
+        });
     }
 }
 
