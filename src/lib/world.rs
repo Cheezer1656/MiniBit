@@ -16,9 +16,9 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-use std::borrow::Cow;
+use valence::{interact_block::InteractBlockEvent, inventory::{ClientInventoryState, HeldItem}, math::IVec3, prelude::*};
 
-use valence::{interact_block::InteractBlockEvent, inventory::{ClientInventoryState, HeldItem}, math::IVec3, prelude::*, protocol::{packets::play::InventoryS2c, VarInt, WritePacket}};
+use super::player::resync_inv;
 
 #[derive(Resource)]
 struct DiggingPluginResource {
@@ -98,20 +98,6 @@ impl Plugin for PlacingPlugin {
             })
             .add_systems(Update, handle_placing_events);
     }
-}
-
-fn resync_inv(
-    client: &mut Client,
-    client_inv: &Inventory,
-    inv_state: &ClientInventoryState,
-    cursor_item: &CursorItem,
-) {
-    client.write_packet(&InventoryS2c {
-        window_id: 0,
-        state_id: VarInt(inv_state.state_id().0),
-        slots: Cow::Borrowed(client_inv.slot_slice()),
-        carried_item: Cow::Borrowed(&cursor_item.0),
-    });
 }
 
 // TODO: Nest the loops and if statements so that you only need to call resync_inv once

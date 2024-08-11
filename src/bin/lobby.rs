@@ -26,7 +26,7 @@ use std::{
     time::{Duration, SystemTime},
 };
 
-use lib::config::{ConfigLoaderPlugin, WorldValue};
+use lib::{config::{ConfigLoaderPlugin, WorldValue}, player::*};
 use serde::Deserialize;
 use valence::{
     entity::{living::Health, player::{PlayerEntityBundle, PlayerModelParts}}, event_loop::PacketEvent, inventory::{ClickSlotEvent, HeldItem}, message::{ChatMessageEvent, SendMessage}, nbt::compound, player_list::{DisplayName, Listed, PlayerListEntryBundle}, prelude::*, protocol::{packets::play::PlayerInteractItemC2s, sound::SoundCategory, Sound}
@@ -97,6 +97,7 @@ fn main() {
             phantom: PhantomData,
         })
         .add_plugins(DefaultPlugins)
+        .add_plugins((InvBroadcastPlugin, DisableDropPlugin))
         .insert_resource(ServerGlobals {
             navigator_gui: None,
         })

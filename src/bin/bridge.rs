@@ -73,6 +73,7 @@ fn main() {
         .add_plugins(DefaultPlugins)
         .add_plugins((
             InvBroadcastPlugin,
+            DisableDropPlugin,
             ProjectilePlugin,
             DiggingPlugin {
                 whitelist: vec![
