@@ -20,23 +20,24 @@
 use std::borrow::Cow;
 
 use valence::{
-    entity::EntityId,
-    event_loop::PacketEvent,
-    inventory::{ClientInventoryState, DropItemStackEvent, HeldItem},
-    prelude::*,
-    protocol::{
+    entity::{living::LivingFlags, EntityId}, event_loop::PacketEvent, interact_item::InteractItemEvent, inventory::{ClientInventoryState, DropItemStackEvent, HeldItem, PlayerAction}, prelude::*, protocol::{
         packets::play::{
-            entity_equipment_update_s2c::EquipmentEntry, ClickSlotC2s, EntityEquipmentUpdateS2c, InventoryS2c, UpdateSelectedSlotC2s
+            entity_equipment_update_s2c::EquipmentEntry, ClickSlotC2s, EntityEquipmentUpdateS2c, InventoryS2c, PlayerActionC2s, UpdateSelectedSlotC2s
         },
         VarInt, WritePacket,
-    },
+    }
 };
 
 pub struct InvBroadcastPlugin;
 
 impl Plugin for InvBroadcastPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Update, (broadcast_inv_updates, broadcast_slot_updates));
+        app.add_systems(Update, (
+            broadcast_inv_updates,
+            broadcast_slot_updates,
+            broadcast_use_item,
+            broadcast_stop_item,
+        ));
     }
 }
 
@@ -106,6 +107,32 @@ fn broadcast_slot_updates(
             for (mut client, layer) in clients.iter_mut() {
                 if layer == layer_id {
                     client.write_packet(&update_packet);
+                }
+            }
+        }
+    }
+}
+
+fn broadcast_use_item(
+    mut clients: Query<&mut LivingFlags, With<Client>>,
+    mut events: EventReader<InteractItemEvent>,
+) {
+    for event in events.read() {
+        if let Ok(mut flags) = clients.get_mut(event.client) {
+            flags.set_using_item(true);
+        }
+    }
+}
+
+fn broadcast_stop_item(
+    mut clients: Query<&mut LivingFlags, With<Client>>,
+    mut packets: EventReader<PacketEvent>,
+) {
+    for packet in packets.read() {
+        if let Some(pkt) = packet.decode::<PlayerActionC2s>() {
+            if pkt.action == PlayerAction::ReleaseUseItem {
+                if let Ok(mut flags) = clients.get_mut(packet.client) {
+                    flags.set_using_item(false);
                 }
             }
         }
