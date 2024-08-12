@@ -185,6 +185,13 @@ fn handle_collision_events(
                     Vec3::new(0.0, 0.0, 0.0),
                     &mut end_game,
                 );
+                attacker.client.play_sound(
+                    Sound::EntityArrowHitPlayer,
+                    SoundCategory::Player,
+                    attacker.pos.0,
+                    1.0,
+                    1.0,
+                );
             }
         }
     }
