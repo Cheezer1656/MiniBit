@@ -121,10 +121,6 @@ fn handle_player_actions(
 
                 let tick_diff = server.current_tick() - player.draw_tick.0;
 
-                if tick_diff < 5 {
-                    continue;
-                }
-
                 let vel = Vec3::new(
                     x / mag,
                     y / mag,
@@ -178,7 +174,7 @@ pub fn apply_arrow_physics(
         let player_shape = Cuboid::new(Vector::new(0.6, 0.9, 0.6));
         
         for (player_entity, player_pos, player_vel) in players.iter() {
-            let player_iso = Isometry3::new(Vector::new(player_pos.0.x as f32, player_pos.0.y as f32, player_pos.0.z as f32), na::zero());
+            let player_iso = Isometry3::new(Vector::new(player_pos.0.x as f32, player_pos.0.y as f32 + 0.9, player_pos.0.z as f32), na::zero());
             let player_vel = Vector::new(player_vel.0.x / 100.0, player_vel.0.y / 100.0, player_vel.0.z / 100.0);
 
             if let Some(_) = cast_shapes(&arrow_iso, &arrow_vel, &arrow_shape, &player_iso, &player_vel, &player_shape, ShapeCastOptions::with_max_time_of_impact(1.0)).unwrap() {

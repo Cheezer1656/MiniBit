@@ -25,6 +25,7 @@ use bevy_ecs::query::QueryData;
 use lib::duels::*;
 use lib::projectiles::*;
 use valence::entity::living::Health;
+use valence::entity::Velocity;
 use valence::entity::{EntityId, EntityStatuses};
 use valence::math::Vec3Swizzles;
 use valence::prelude::*;
@@ -170,17 +171,17 @@ fn handle_combat_events(
 
 fn handle_collision_events(
     mut clients: Query<CombatQuery>,
-    arrows: Query<&ProjectileOwner>,
+    arrows: Query<(&Velocity, &ProjectileOwner)>,
     mut collisions: EventReader<ProjectileCollisionEvent>,
     mut end_game: EventWriter<EndGameEvent>,
 ) {
     for event in collisions.read() {
-        if let Ok(owner) = arrows.get(event.arrow) {
+        if let Ok((vel, owner)) = arrows.get(event.arrow) {
             if let Ok([mut attacker, mut victim]) = clients.get_many_mut([owner.0, event.player]) {
                 damage_player(
                     &mut attacker,
                     &mut victim,
-                    6.0,
+                    0.13 * vel.0.length(),
                     Vec3::new(0.0, 0.0, 0.0),
                     &mut end_game,
                 );
