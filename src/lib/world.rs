@@ -83,18 +83,33 @@ pub struct PlacingRestrictions {
 
 #[derive(Resource)]
 struct PlacingPluginResource {
-    build_limit: isize,
+    max_x: isize,
+    min_x: isize,
+    max_y: isize,
+    min_y: isize,
+    max_z: isize,
+    min_z: isize,
 }
 
 pub struct PlacingPlugin {
-    pub build_limit: isize,
+    pub max_x: isize,
+    pub min_x: isize,
+    pub max_y: isize,
+    pub min_y: isize,
+    pub max_z: isize,
+    pub min_z: isize,
 }
 
 impl Plugin for PlacingPlugin {
     fn build(&self, app: &mut App) {
         app
             .insert_resource(PlacingPluginResource {
-                build_limit: self.build_limit,
+                max_x: self.max_x,
+                min_x: self.min_x,
+                max_y: self.max_y,
+                min_y: self.min_y,
+                max_z: self.max_z,
+                min_z: self.min_z,
             })
             .add_systems(Update, handle_placing_events);
     }
@@ -120,7 +135,19 @@ fn handle_placing_events(
     'outer: for event in events.read() {
         if let Ok((mut client, gamemode, pos, mut inv, inv_state, cursor_item, held_item, layer)) = clients.get_mut(event.client) {
             let block_pos = event.position.get_in_direction(event.face);
-            if *gamemode == GameMode::Adventure || *gamemode == GameMode::Spectator || event.hand != Hand::Main || block_pos.y as isize > res.build_limit {
+            let block_x = block_pos.x as isize;
+            let block_y = block_pos.y as isize;
+            let block_z = block_pos.z as isize;
+            if *gamemode == GameMode::Adventure
+                || *gamemode == GameMode::Spectator
+                || event.hand != Hand::Main
+                || block_x > res.max_x
+                || block_x < res.min_x
+                || block_y > res.max_y
+                || block_y < res.min_y
+                || block_z > res.max_z
+                || block_z < res.min_z
+            {
                 resync_inv(&mut client, &inv, inv_state, cursor_item);
                 continue;
             }

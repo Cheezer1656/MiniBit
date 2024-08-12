@@ -84,7 +84,14 @@ fn main() {
                     BlockKind::WhiteTerracotta,
                 ],
             },
-            PlacingPlugin { build_limit: 100 },
+            PlacingPlugin {
+                max_x: 16,
+                min_x: -16,
+                max_y: 100,
+                min_y: 19,
+                max_z: 60,
+                min_z: -60,
+            },
         ))
         .add_event::<DeathEvent>()
         .add_event::<ScoreEvent>()
