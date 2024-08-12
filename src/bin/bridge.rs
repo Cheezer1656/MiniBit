@@ -128,6 +128,7 @@ fn main() {
                 cancel_gapple,
                 handle_collision_events,
                 handle_death,
+                play_death_sound.before(handle_death),
                 handle_score.after(check_goals).before(handle_death),
                 handle_oob_clients,
                 game_broadcast,
@@ -597,9 +598,11 @@ fn handle_death(
             &mut Inventory,
             &Username,
             &PlayerGameState,
+            &mut CombatState,
         ),
         With<Client>,
     >,
+    usernames: Query<&Username, With<Client>>,
     games: Query<&MapIndex>,
     mut deaths: EventReader<DeathEvent>,
     mut broadcasts: EventWriter<MessageEvent>,
@@ -615,6 +618,7 @@ fn handle_death(
             mut inventory,
             username,
             gamestate,
+            mut combatstate,
         )) = clients.get_mut(*entity)
         {
             if let Some(game_id) = gamestate.game_id {
@@ -637,10 +641,50 @@ fn handle_death(
                                 Color::BLUE
                             } else {
                                 Color::RED
-                            }) + Text::from(" has died!").color(Color::GRAY),
+                            }) + if let Some(attacker) = combatstate.last_attacker {
+                                if let Ok(username) = usernames.get(attacker) {
+                                    Text::from(" was killed by ").color(Color::GRAY)
+                                        + Text::from(username.0.clone()).color(if gamestate.team == 0 {
+                                            Color::RED
+                                        } else {
+                                            Color::BLUE
+                                        })
+                                } else {
+                                    Text::from(" has died!").color(Color::GRAY)
+                                }
+                            } else {
+                                Text::from(" has died!").color(Color::GRAY)
+                            },
                         });
                     }
+                    combatstate.last_attacker = None;
                 }
+            }
+        }
+    }
+}
+
+fn play_death_sound(
+    mut clients: Query<(&mut Client, &Position)>,
+    states: Query<&CombatState>,
+    mut deaths: EventReader<DeathEvent>
+) {
+    for DeathEvent(entity, show) in deaths.read() {
+        let Ok(state) = states.get(*entity) else {
+            continue;
+        };
+        let Some(attacker) = state.last_attacker else {
+            continue;
+        };
+        if let Ok((mut client, pos)) = clients.get_mut(attacker) {
+            if *show {
+                client.play_sound(
+                    Sound::EntityArrowHitPlayer,
+                    SoundCategory::Player,
+                    pos.0,
+                    1.0,
+                    1.0,
+                );
             }
         }
     }
@@ -748,6 +792,8 @@ fn damage_player(
         entity_id: VarInt(victim.id.get()),
         yaw: 0.0,
     });
+
+    victim.state.last_attacker = Some(attacker.entity);
 
     let mut new_damage = damage;
     if victim.absorption.0 > 0.0 {

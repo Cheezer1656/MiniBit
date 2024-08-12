@@ -66,6 +66,7 @@ pub struct PlayerGameState {
 pub struct CombatState {
     pub last_attacked_tick: i64,
     pub has_bonus_knockback: bool,
+    pub last_attacker: Option<Entity>,
 }
 
 #[derive(Event)]
@@ -164,10 +165,19 @@ pub fn handle_disconnect(
 }
 
 pub fn start_game(
+    mut clients: Query<&mut CombatState, With<Client>>,
+    games: Query<&Entities>,
     mut start_game: EventReader<StartGameEvent>,
     mut gamestage: EventWriter<GameStageEvent>,
 ) {
     for event in start_game.read() {
+        if let Ok(entities) = games.get(event.0) {
+            for entity in entities.0.iter() {
+                if let Ok(mut state) = clients.get_mut(*entity) {
+                    *state = CombatState::default();
+                }
+            }
+        }
         gamestage.send(GameStageEvent {
             game_id: event.0,
             stage: 0,
