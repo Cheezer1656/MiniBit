@@ -23,6 +23,7 @@ mod lib;
 
 use bevy_ecs::query::QueryData;
 use lib::duels::*;
+use lib::player::InvBroadcastPlugin;
 use lib::projectiles::*;
 use valence::entity::living::Health;
 use valence::entity::Velocity;
@@ -39,7 +40,7 @@ fn main() {
     App::new()
         .add_plugins(DuelsPlugin { default_gamemode: GameMode::Adventure, copy_map: false })
         .add_plugins(DefaultPlugins)
-        .add_plugins(ProjectilePlugin)
+        .add_plugins((InvBroadcastPlugin, ProjectilePlugin))
         .add_systems(
             EventLoopUpdate,
             handle_combat_events,
