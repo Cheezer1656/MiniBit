@@ -376,6 +376,12 @@ fn update_bow_cooldown(
                 level: VarInt(0),
                 total_xp: VarInt(0),
             });
+        } else if tick_diff == 59 {
+            client.write_packet(&ExperienceBarUpdateS2c {
+                bar: 1.0,
+                level: VarInt(0),
+                total_xp: VarInt(0),
+            });
         }
         if bow_status.cooldown < tick {
             inv.set_slot(bow_status.slot, ItemStack::new(ItemKind::Arrow, 1, None));
