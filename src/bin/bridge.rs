@@ -42,6 +42,7 @@ use valence::nbt::compound;
 use valence::nbt::List;
 use valence::prelude::*;
 use valence::protocol::packets::play::DamageTiltS2c;
+use valence::protocol::packets::play::ExperienceBarUpdateS2c;
 use valence::protocol::packets::play::PlayerActionC2s;
 use valence::protocol::sound::SoundCategory;
 use valence::protocol::Sound;
@@ -61,6 +62,21 @@ struct ScoreEvent {
 struct MessageEvent {
     game: Entity,
     msg: Text,
+}
+
+#[derive(Component)]
+struct BowStatus {
+    cooldown: i64,
+    slot: u16,
+}
+
+impl Default for BowStatus {
+    fn default() -> Self {
+        Self {
+            cooldown: i64::MAX,
+            slot: 44,
+        }
+    }
 }
 
 #[derive(Component)]
@@ -106,6 +122,7 @@ fn main() {
                 gamestage_change,
                 end_game,
                 check_goals,
+                update_bow_cooldown,
                 set_use_tick,
                 eat_gapple,
                 cancel_gapple,
@@ -148,7 +165,7 @@ fn setup(mut commands: Commands, server_config: Res<DuelsConfig>) {
 
 fn init_clients(clients: Query<Entity, Added<Client>>, mut commands: Commands) {
     for entity in clients.iter() {
-        commands.entity(entity).insert(EatingStartTick(i64::MAX));
+        commands.entity(entity).insert((EatingStartTick(i64::MAX), BowStatus::default()));
     }
 }
 
@@ -264,7 +281,7 @@ fn fill_inventory(inv: &mut Inventory, team: u8) {
     inv.set_slot(39, ItemStack::new(block_type, 64, None));
     inv.set_slot(40, ItemStack::new(block_type, 64, None));
     inv.set_slot(41, ItemStack::new(ItemKind::GoldenApple, 8, None));
-    inv.set_slot(44, ItemStack::new(ItemKind::Arrow, 10, None));
+    inv.set_slot(44, ItemStack::new(ItemKind::Arrow, 1, None));
 }
 
 fn end_game(
@@ -335,6 +352,38 @@ fn check_goals(
                     }
                 }
             }
+        }
+    }
+}
+
+fn update_bow_cooldown(
+    mut clients: Query<(&mut Client, &mut Inventory, &CursorItem, &mut BowStatus)>,
+    server: Res<Server>,
+) {
+    for (mut client, mut inv, cursor_item, mut bow_status) in clients.iter_mut() {
+        let tick = server.current_tick();
+        if let Some(slot) = inv.first_slot_with_item(ItemKind::Arrow, 2) {
+            if inv.slot(slot).count > 0 || cursor_item.0.item == ItemKind::Arrow {
+                bow_status.cooldown = tick + 60;
+                bow_status.slot = slot;
+                continue;
+            }
+        }
+        let tick_diff = bow_status.cooldown - tick;
+        if tick_diff % 5 == 0 {
+            client.write_packet(&ExperienceBarUpdateS2c {
+                bar: tick_diff as f32 / 60.0,
+                level: VarInt(0),
+                total_xp: VarInt(0),
+            });
+        }
+        if bow_status.cooldown < tick {
+            inv.set_slot(bow_status.slot, ItemStack::new(ItemKind::Arrow, 1, None));
+            client.write_packet(&ExperienceBarUpdateS2c {
+                bar: 0.0,
+                level: VarInt(0),
+                total_xp: VarInt(0),
+            });
         }
     }
 }
