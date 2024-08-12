@@ -39,6 +39,7 @@ use valence::inventory::PlayerAction;
 use valence::math::IVec3;
 use valence::math::Vec3Swizzles;
 use valence::nbt::compound;
+use valence::nbt::List;
 use valence::prelude::*;
 use valence::protocol::packets::play::DamageTiltS2c;
 use valence::protocol::packets::play::PlayerActionC2s;
@@ -245,7 +246,14 @@ fn fill_inventory(inv: &mut Inventory, team: u8) {
     inv.set_slot(8, ItemStack::new(ItemKind::LeatherBoots, 1, armor_nbt));
     inv.set_slot(36, ItemStack::new(ItemKind::IronSword, 1, None));
     inv.set_slot(37, ItemStack::new(ItemKind::Bow, 1, None));
-    inv.set_slot(38, ItemStack::new(ItemKind::DiamondPickaxe, 1, None));
+    inv.set_slot(38, ItemStack::new(ItemKind::DiamondPickaxe, 1, Some(compound! {
+        "Enchantments" => List::Compound(vec! [
+            compound! {
+                "id" => "efficiency",
+                "lvl" => 2
+            }
+        ])
+    })));
     inv.set_slot(39, ItemStack::new(block_type, 64, None));
     inv.set_slot(40, ItemStack::new(block_type, 64, None));
     inv.set_slot(41, ItemStack::new(ItemKind::GoldenApple, 8, None));
