@@ -30,6 +30,7 @@ use lib::projectiles::*;
 use lib::world::*;
 use valence::entity::living::Absorption;
 use valence::entity::living::Health;
+use valence::entity::Velocity;
 use valence::entity::{EntityId, EntityStatuses};
 use valence::event_loop::PacketEvent;
 use valence::interact_item::InteractItemEvent;
@@ -476,17 +477,17 @@ fn handle_combat_events(
 
 fn handle_collision_events(
     mut clients: Query<CombatQuery>,
-    arrows: Query<&ProjectileOwner>,
+    arrows: Query<(&Velocity, &ProjectileOwner)>,
     mut collisions: EventReader<ProjectileCollisionEvent>,
     mut deaths: EventWriter<DeathEvent>,
 ) {
     for event in collisions.read() {
-        if let Ok(owner) = arrows.get(event.arrow) {
+        if let Ok((vel, owner)) = arrows.get(event.arrow) {
             if let Ok([mut attacker, mut victim]) = clients.get_many_mut([owner.0, event.player]) {
                 damage_player(
                     &mut attacker,
                     &mut victim,
-                    6.0,
+                    0.13 * vel.0.length(), // TODO: Make the damage accurate
                     Vec3::new(0.0, 0.0, 0.0),
                     &mut deaths,
                 );
