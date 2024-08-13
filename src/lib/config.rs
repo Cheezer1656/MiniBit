@@ -17,10 +17,7 @@
 */
 
 use std::{
-    marker::PhantomData,
-    net::{IpAddr, SocketAddr},
-    str::FromStr,
-    sync::Arc,
+    marker::PhantomData, net::{IpAddr, SocketAddr}, path::PathBuf, str::FromStr, sync::Arc
 };
 
 use ::serde::Deserialize;
@@ -28,12 +25,12 @@ use serde::de::DeserializeOwned;
 use valence::{network::NetworkSettings, prelude::*, CompressionThreshold, ServerSettings};
 
 #[derive(Deserialize)]
-pub struct NetworkConfig<'a> {
+pub struct NetworkConfig {
     pub ip: String,
     pub port: u16,
     pub max_players: usize,
     pub connection_mode: u8,
-    pub secret: &'a str,
+    pub secret_file: PathBuf,
     pub prevent_proxy_connections: bool,
 }
 
@@ -61,11 +58,11 @@ pub struct ConfigLoaderPlugin<T: DeserializeOwned> {
 impl<T: Resource + DeserializeOwned + Sync + Send + 'static> Plugin for ConfigLoaderPlugin<T> {
     fn build(&self, app: &mut App) {
         let data = std::fs::read_to_string("server.json").unwrap();
-
         let netconfig = serde_json::from_str::<NetworkConfig>(&data).unwrap();
 
-        let data = std::fs::read_to_string("config.json").unwrap();
+        let secret = std::fs::read_to_string(netconfig.secret_file).expect("Failed to read secret file");
 
+        let data = std::fs::read_to_string("config.json").unwrap();
         let config = serde_json::from_str::<T>(&data).unwrap();
 
         app.insert_resource(ServerSettings {
@@ -79,7 +76,7 @@ impl<T: Resource + DeserializeOwned + Sync + Send + 'static> Plugin for ConfigLo
                 1 => ConnectionMode::Offline,
                 2 => ConnectionMode::BungeeCord,
                 3 => ConnectionMode::Velocity {
-                    secret: Arc::from(netconfig.secret),
+                    secret: Arc::from(secret),
                 },
                 _ => ConnectionMode::Online {
                     prevent_proxy_connections: netconfig.prevent_proxy_connections,
