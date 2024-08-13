@@ -53,10 +53,7 @@ use valence::protocol::WritePacket;
 struct DeathEvent(Entity, bool);
 
 #[derive(Event)]
-struct ScoreEvent {
-    game: Entity,
-    team: u8,
-}
+struct ScoreEvent (Entity);
 
 #[derive(Event)]
 struct MessageEvent {
@@ -310,7 +307,7 @@ fn check_goals(
     mut deaths: EventWriter<DeathEvent>,
 ) {
     for (entity, pos, gamestate) in clients.iter() {
-        if let Some(game_id) = gamestate.game_id {
+        if let Some(_) = gamestate.game_id {
             if let Some(data) = &config.other {
                 let goal1 = &data["goal1"];
                 let goal2 = &data["goal2"];
@@ -325,10 +322,7 @@ fn check_goals(
                 {
                     match gamestate.team {
                         1 => {
-                            scores.send(ScoreEvent {
-                                game: game_id,
-                                team: 1,
-                            });
+                            scores.send(ScoreEvent(entity));
                         }
                         _ => {
                             deaths.send(DeathEvent(entity, true));
@@ -342,10 +336,7 @@ fn check_goals(
                 {
                     match gamestate.team {
                         0 => {
-                            scores.send(ScoreEvent {
-                                game: game_id,
-                                team: 0,
-                            });
+                            scores.send(ScoreEvent(entity));
                         }
                         _ => {
                             deaths.send(DeathEvent(entity, true));
@@ -691,6 +682,7 @@ fn play_death_sound(
 }
 
 fn handle_score(
+    clients: Query<(&Username, &PlayerGameState), With<Client>>,
     mut games: Query<(&Entities, &mut GameStage, &mut GameTime, &mut GameData)>,
     mut scores: EventReader<ScoreEvent>,
     mut deaths: EventWriter<DeathEvent>,
@@ -698,39 +690,49 @@ fn handle_score(
     mut gamestage: EventWriter<GameStageEvent>,
     mut end_game: EventWriter<EndGameEvent>,
 ) {
-    for ScoreEvent { game, team } in scores.read() {
-        if let Ok((entities, mut stage, mut time, mut data)) = games.get_mut(*game) {
-            let mut score = 0;
-            if let Some(DataValue::Int(old_score)) = data.0.get(&(*team as usize)) {
-                score = *old_score + 1;
-            }
-            data.0.insert(*team as usize, DataValue::Int(score));
-            for entity in entities.0.iter() {
-                deaths.send(DeathEvent(*entity, false));
-            }
-            broadcasts.send(MessageEvent {
-                game: *game,
-                msg: if *team == 0 {
-                    Text::from("Team Blue").color(Color::BLUE)
+    for ScoreEvent(player) in scores.read() {
+        let Ok((username, gamestate)) = clients.get(*player) else {
+            continue;
+        };
+        let Some(game) = gamestate.game_id else {
+            continue;
+        };
+        let Ok((entities, mut stage, mut time, mut data)) = games.get_mut(game) else {
+            continue;
+        };
+        let team = gamestate.team as usize;
+        let mut score = 0;
+        if let Some(DataValue::Int(old_score)) = data.0.get(&(team)) {
+            score = *old_score + 1;
+        }
+        data.0.insert(team, DataValue::Int(score));
+        for entity in entities.0.iter() {
+            deaths.send(DeathEvent(*entity, false));
+        }
+        broadcasts.send(MessageEvent {
+            game: game,
+            msg: Text::from(username.0.clone()).color(
+                if team == 0 {
+                    Color::BLUE
                 } else {
-                    Text::from("Team Red").color(Color::RED)
-                } + Text::from(" scored! (").color(Color::GRAY)
-                    + Text::from(score.to_string()).color(Color::GOLD)
-                    + Text::from("/5)").color(Color::GRAY),
+                    Color::RED
+                },
+            ) + Text::from(" scored! (").color(Color::GRAY)
+                + Text::from(score.to_string()).color(Color::GOLD)
+                + Text::from("/5)").color(Color::GRAY),
+        });
+        if score >= 5 {
+            end_game.send(EndGameEvent {
+                game_id: game,
+                loser: if team == 0 { 1 } else { 0 },
             });
-            if score >= 5 {
-                end_game.send(EndGameEvent {
-                    game_id: *game,
-                    loser: if *team == 0 { 1 } else { 0 },
-                });
-            } else {
-                time.0 = SystemTime::now(); // TODO: Replace with a better solution because the game time is not supposed to keep track of the entire game duration
-                stage.0 = 0;
-                gamestage.send(GameStageEvent {
-                    game_id: *game,
-                    stage: 0,
-                });
-            }
+        } else {
+            time.0 = SystemTime::now(); // TODO: Replace with a better solution because the game time is not supposed to keep track of the entire game duration
+            stage.0 = 0;
+            gamestage.send(GameStageEvent {
+                game_id: game,
+                stage: 0,
+            });
         }
     }
 }
