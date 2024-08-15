@@ -3,6 +3,6 @@
     "port": 25565,
     "max_players": 50,
     "connection_mode": 1,
-    "secret_file": "../../proxy/forwarding.secret",
+    "secret_file": "../proxy/forwarding.secret",
     "prevent_proxy_connections": false
 }
