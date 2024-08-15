@@ -16,9 +16,23 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-pub mod config;
-pub mod duels;
-pub mod projectiles;
-pub mod player;
-pub mod world;
-pub mod color;
+#![allow(dead_code)]
+
+pub enum ArmorColors {
+    Red = 11546150,
+    Orange = 16351261,
+    Yellow = 16701501,
+    Lime = 8439583,
+    Green = 6192150,
+    LightBlue = 3847130,
+    Cyan = 1481884,
+    Blue = 3949738,
+    Purple = 8991416,
+    Magenta = 13061821,
+    Pink = 15961002,
+    White = 16383998,
+    LightGray = 10329495,
+    Gray = 4673362,
+    Black = 1908001,
+    Brown = 8606770,
+}

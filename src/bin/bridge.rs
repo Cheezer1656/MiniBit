@@ -24,6 +24,7 @@ mod lib;
 use std::time::SystemTime;
 
 use bevy_ecs::query::QueryData;
+use lib::color::ArmorColors;
 use lib::duels::*;
 use lib::player::*;
 use lib::projectiles::*;
@@ -246,8 +247,8 @@ fn fill_inventory(inv: &mut Inventory, team: u8) {
     let armor_nbt = Some(compound! {
         "display" => compound! {
             "color" => match team {
-                0 => 3949738,
-                1 => 11546150,
+                0 => ArmorColors::Blue as i32,
+                1 => ArmorColors::Red as i32,
                 _ => 0,
             }
         }
