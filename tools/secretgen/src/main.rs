@@ -6,5 +6,5 @@ fn main() {
     let s: String = (0..12)
         .map(|_| rng.sample(Alphanumeric) as char)
         .collect();
-    println!("{}", s);
+    print!("{}", s);
 }
