@@ -60,7 +60,11 @@ impl<T: Resource + DeserializeOwned + Sync + Send + 'static> Plugin for ConfigLo
         let data = std::fs::read_to_string("server.json").unwrap();
         let netconfig = serde_json::from_str::<NetworkConfig>(&data).unwrap();
 
-        let secret = std::fs::read_to_string(netconfig.secret_file).expect("Failed to read secret file");
+        let secret = if netconfig.connection_mode == 3 {
+            std::fs::read_to_string(netconfig.secret_file).expect("Failed to read secret file")
+        } else {
+            String::new()
+        };
 
         let data = std::fs::read_to_string("config.json").unwrap();
         let config = serde_json::from_str::<T>(&data).unwrap();
