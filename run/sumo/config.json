@@ -13,8 +13,8 @@
         },
         {
             "path": "../worlds/sumo1",
-            "x_chunks": [-1, 1],
-            "z_chunks": [-1, 1],
+            "x_chunks": [-3, 2],
+            "z_chunks": [-3, 2],
             "spawns": [
                 {
                     "pos": [0.5, 10.0, 8],
