@@ -497,6 +497,7 @@ fn handle_combat_events(
 
         if interaction != EntityInteraction::Attack
             || server.current_tick() - victim.state.last_attacked_tick < 10
+            || attacker.gamestate.team == victim.gamestate.team
             || attacker.gamestate.game_id != victim.gamestate.game_id
         {
             continue;
@@ -547,6 +548,10 @@ fn handle_collision_events(
     for event in collisions.read() {
         if let Ok((vel, owner)) = arrows.get(event.arrow) {
             if let Ok([mut attacker, mut victim]) = clients.get_many_mut([owner.0, event.player]) {
+                if attacker.gamestate.team == victim.gamestate.team {
+                    continue;
+                }
+
                 damage_player(
                     &mut attacker,
                     &mut victim,
