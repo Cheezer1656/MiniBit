@@ -91,62 +91,67 @@ fn handle_player_actions(
             let Ok(mut player) = players.get_mut(packet.client) else {
                 continue;
             };
-            if pkt.action == PlayerAction::ReleaseUseItem
-                && player.inv.slot(player.held_item.slot()).item == ItemKind::Bow
-            {
-                let Some(arrow_slot) = player.inv.first_slot_with_item(ItemKind::Arrow, 65) else {
-                    continue;
-                };
-
-                let count = player.inv.slot(arrow_slot).count;
-                player.inv.set_slot_amount(arrow_slot, count - 1);
-                for mut client in clients.iter_mut() {
-                    client.play_sound(
-                        Sound::EntityArrowShoot,
-                        SoundCategory::Player,
-                        player.pos.0,
-                        1.0,
-                        1.0,
-                    );
-                }
-
-                let rad_yaw = player.yaw.0.to_radians();
-                let rad_pitch = player.look.pitch.to_radians();
-                let hspeed = rad_pitch.cos();
-                let x = -rad_yaw.sin() * hspeed;
-                let y = -rad_pitch.sin();
-                let z = rad_yaw.cos() * hspeed;
-
-                let mag = (x * x + y * y + z * z).sqrt();
-
-                let tick_diff = server.current_tick() - player.draw_tick.0;
-
-                let vel = Vec3::new(
-                    x / mag,
-                    y / mag,
-                    z / mag,
-                ) * tick_diff.clamp(0, 20) as f32 * 3.0;
-                let dir = vel.normalize().as_dvec3() * 0.5;
-                let arrow_id = commands
-                    .spawn(ArrowEntityBundle {
-                        position: Position(DVec3::new(
-                            player.pos.0.x + dir.x,
-                            player.pos.0.y + 1.62,
-                            player.pos.0.z + dir.z,
-                        )),
-                        look: *player.look,
-                        head_yaw: *player.yaw,
-                        velocity: Velocity(vel),
-                        layer: *player.layer,
-                        ..Default::default()
-                    })
-                    .id();
-                commands
-                    .entity(arrow_id)
-                    .insert(ProjectileOwner(player.entity));
-
-                player.draw_tick.0 = i64::MAX;
+            if player.inv.slot(player.held_item.slot()).item != ItemKind::Bow {
+                continue;
             }
+            let Some(arrow_slot) = player.inv.first_slot_with_item(ItemKind::Arrow, 65) else {
+                continue;
+            };
+            let count = player.inv.slot(arrow_slot).count;
+            if count == 0 {
+                continue;
+            }
+            if pkt.action != PlayerAction::ReleaseUseItem {
+                continue;
+            }
+
+            player.inv.set_slot_amount(arrow_slot, count - 1);
+            for mut client in clients.iter_mut() {
+                client.play_sound(
+                    Sound::EntityArrowShoot,
+                    SoundCategory::Player,
+                    player.pos.0,
+                    1.0,
+                    1.0,
+                );
+            }
+
+            let rad_yaw = player.yaw.0.to_radians();
+            let rad_pitch = player.look.pitch.to_radians();
+            let hspeed = rad_pitch.cos();
+            let x = -rad_yaw.sin() * hspeed;
+            let y = -rad_pitch.sin();
+            let z = rad_yaw.cos() * hspeed;
+
+            let mag = (x * x + y * y + z * z).sqrt();
+
+            let tick_diff = server.current_tick() - player.draw_tick.0;
+
+            let vel = Vec3::new(
+                x / mag,
+                y / mag,
+                z / mag,
+            ) * tick_diff.clamp(0, 20) as f32 * 3.0;
+            let dir = vel.normalize().as_dvec3() * 0.5;
+            let arrow_id = commands
+                .spawn(ArrowEntityBundle {
+                    position: Position(DVec3::new(
+                        player.pos.0.x + dir.x,
+                        player.pos.0.y + 1.62,
+                        player.pos.0.z + dir.z,
+                    )),
+                    look: *player.look,
+                    head_yaw: *player.yaw,
+                    velocity: Velocity(vel),
+                    layer: *player.layer,
+                    ..Default::default()
+                })
+                .id();
+            commands
+                .entity(arrow_id)
+                .insert(ProjectileOwner(player.entity));
+
+            player.draw_tick.0 = i64::MAX;
         }
     }
 }
