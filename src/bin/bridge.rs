@@ -556,7 +556,7 @@ fn handle_collision_events(
                     &mut attacker,
                     &mut victim,
                     0.13 * vel.0.length(), // TODO: Make the damage accurate
-                    Vec3::new(0.0, 0.0, 0.0),
+                    Vec3::from(vel.0).normalize().with_y(0.0) * 0.6 * 20.0, // TODO: Make the knockback accurate
                     &mut deaths,
                 );
                 attacker.client.play_sound(
