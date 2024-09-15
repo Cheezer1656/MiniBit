@@ -21,14 +21,17 @@
 #[path = "../lib/mod.rs"]
 mod lib;
 
+use std::marker::PhantomData;
 use std::time::SystemTime;
 
 use bevy_ecs::query::QueryData;
 use lib::color::ArmorColors;
+use lib::config::WorldValue;
 use lib::duels::*;
 use lib::player::*;
 use lib::projectiles::*;
 use lib::world::*;
+use serde::Deserialize;
 use valence::entity::living::Absorption;
 use valence::entity::living::Health;
 use valence::entity::Velocity;
@@ -77,14 +80,28 @@ impl Default for BowStatus {
     }
 }
 
+#[derive(Resource, Deserialize)]
+struct BridgeConfig {
+    worlds: Vec<WorldValue>,
+    goals: Vec<[i32; 5]>,
+    block_restrictions: Vec<[i32; 6]>,
+}
+
+impl DuelsConfig for BridgeConfig {
+    fn worlds(&self) -> &Vec<WorldValue> {
+        &self.worlds
+    }
+}
+
 #[derive(Component)]
 struct EatingStartTick(pub i64);
 
 fn main() {
     App::new()
-        .add_plugins(DuelsPlugin {
+        .add_plugins(DuelsPlugin::<BridgeConfig> {
             default_gamemode: GameMode::Survival,
             copy_map: true,
+            phantom: PhantomData,
         })
         .add_plugins(DefaultPlugins)
         .add_plugins((
@@ -135,31 +152,12 @@ fn main() {
         .run();
 }
 
-fn setup(mut commands: Commands, server_config: Res<DuelsConfig>) {
-    if let Some(data) = &server_config.other {
-        if let Some(restrictions) = data["block_restrictions"].as_array() {
-            let mut areas = Vec::with_capacity(restrictions.len());
-            for restriction in restrictions {
-                if let Some(restriction) = restriction.as_array() {
-                    if restriction.len() == 6 {
-                        areas.push(BlockArea {
-                            min: IVec3::new(
-                                restriction[0].as_i64().unwrap() as i32,
-                                restriction[1].as_i64().unwrap() as i32,
-                                restriction[2].as_i64().unwrap() as i32,
-                            ),
-                            max: IVec3::new(
-                                restriction[3].as_i64().unwrap() as i32,
-                                restriction[4].as_i64().unwrap() as i32,
-                                restriction[5].as_i64().unwrap() as i32,
-                            ),
-                        });
-                    }
-                }
-            }
-            commands.insert_resource(PlacingRestrictions { areas });
-        }
-    }
+fn setup(mut commands: Commands, server_config: Res<BridgeConfig>) {
+        let areas = server_config.block_restrictions.iter().map(|area| BlockArea {
+            min: IVec3::new(area[0], area[1], area[2]),
+            max: IVec3::new(area[3], area[4], area[5]),
+        }).collect();
+        commands.insert_resource(PlacingRestrictions { areas });
 }
 
 fn init_clients(clients: Query<Entity, Added<Client>>, mut commands: Commands) {
@@ -190,7 +188,7 @@ fn start_game(
 fn gamestage_change(
     mut layers: Query<&mut ChunkLayer>,
     games: Query<(&MapIndex, &EntityLayerId)>,
-    server_config: Res<DuelsConfig>,
+    server_config: Res<BridgeConfig>,
     mut gamestage: EventReader<GameStageEvent>,
 ) {
     for event in gamestage.read() {
@@ -205,7 +203,7 @@ fn gamestage_change(
             0 | 2 => { // For some reason the blocks are overwritten at the start of the game, so we need to reapply them
                 for i in 0..2 {
                     let spawn_pos =
-                        DVec3::from_array(server_config.worlds[map_idx.0].spawns[i].pos);
+                        DVec3::from_array(server_config.worlds()[map_idx.0].spawns[i].pos);
                     // Create the cage
                     for x in -2..=2 {
                         for y in -1..=3 {
@@ -225,7 +223,7 @@ fn gamestage_change(
                 // Clear the cages
                 for i in 0..2 {
                     let spawn_pos =
-                        DVec3::from_array(server_config.worlds[map_idx.0].spawns[i].pos);
+                        DVec3::from_array(server_config.worlds()[map_idx.0].spawns[i].pos);
                     for x in -2..=2 {
                         for y in -1..=3 {
                             for z in -2..=2 {
@@ -303,45 +301,23 @@ fn end_game(
 
 fn check_goals(
     clients: Query<(Entity, &Position, &PlayerGameState), With<Client>>,
-    config: Res<DuelsConfig>,
+    config: Res<BridgeConfig>,
     mut scores: EventWriter<ScoreEvent>,
     mut deaths: EventWriter<DeathEvent>,
 ) {
     for (entity, pos, gamestate) in clients.iter() {
         if let Some(_) = gamestate.game_id {
-            if let Some(data) = &config.other {
-                let goal1 = &data["goal1"];
-                let goal2 = &data["goal2"];
-                let x = pos.0.x.floor();
-                let y = pos.0.y.floor();
-                let z = pos.0.z.floor();
-                if goal1[0].as_f64() <= Some(x)
-                    && goal1[1].as_f64() >= Some(x)
-                    && goal1[2].as_f64() == Some(y)
-                    && goal1[3].as_f64() <= Some(z)
-                    && goal1[4].as_f64() >= Some(z)
+            for (i, goal) in config.goals.iter().enumerate() {
+                if goal[0] <= pos.0.x as i32
+                    && goal[1] >= pos.0.x as i32
+                    && goal[2] == pos.0.y as i32
+                    && goal[3] <= pos.0.z as i32
+                    && goal[4] >= pos.0.z as i32
                 {
-                    match gamestate.team {
-                        1 => {
-                            scores.send(ScoreEvent(entity));
-                        }
-                        _ => {
-                            deaths.send(DeathEvent(entity, true));
-                        }
-                    }
-                } else if goal2[0].as_f64() <= Some(x)
-                    && goal2[1].as_f64() >= Some(x)
-                    && goal2[2].as_f64() == Some(y)
-                    && goal2[3].as_f64() <= Some(z)
-                    && goal2[4].as_f64() >= Some(z)
-                {
-                    match gamestate.team {
-                        0 => {
-                            scores.send(ScoreEvent(entity));
-                        }
-                        _ => {
-                            deaths.send(DeathEvent(entity, true));
-                        }
+                    if gamestate.team == i as u8 {
+                        deaths.send(DeathEvent(entity, true));
+                    } else {
+                        scores.send(ScoreEvent(entity));
                     }
                 }
             }
@@ -603,7 +579,7 @@ fn handle_death(
     games: Query<&MapIndex>,
     mut deaths: EventReader<DeathEvent>,
     mut broadcasts: EventWriter<MessageEvent>,
-    config: Res<DuelsConfig>,
+    config: Res<BridgeConfig>,
 ) {
     for DeathEvent(entity, show) in deaths.read() {
         if let Ok((

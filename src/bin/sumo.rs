@@ -21,8 +21,10 @@
 #[path = "../lib/mod.rs"]
 mod lib;
 
+use std::marker::PhantomData;
+
 use bevy_ecs::query::QueryData;
-use lib::duels::{CombatState, DuelsPlugin, EndGameEvent, PlayerGameState};
+use lib::duels::{CombatState, DefaultDuelsConfig, DuelsPlugin, EndGameEvent, PlayerGameState};
 use valence::entity::{EntityId, EntityStatuses};
 use valence::math::Vec3Swizzles;
 use valence::prelude::*;
@@ -33,7 +35,7 @@ use valence::protocol::VarInt;
 
 fn main() {
     App::new()
-        .add_plugins(DuelsPlugin { default_gamemode: GameMode::Adventure, copy_map: false })
+        .add_plugins(DuelsPlugin::<DefaultDuelsConfig> { default_gamemode: GameMode::Adventure, copy_map: false, phantom: PhantomData })
         .add_plugins(DefaultPlugins)
         .add_systems(EventLoopUpdate, handle_combat_events)
         .add_systems(Update, handle_oob_clients)

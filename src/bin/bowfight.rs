@@ -21,6 +21,8 @@
 #[path = "../lib/mod.rs"]
 mod lib;
 
+use std::marker::PhantomData;
+
 use bevy_ecs::query::QueryData;
 use lib::duels::*;
 use lib::player::InvBroadcastPlugin;
@@ -38,7 +40,7 @@ use valence::protocol::WritePacket;
 
 fn main() {
     App::new()
-        .add_plugins(DuelsPlugin { default_gamemode: GameMode::Adventure, copy_map: false })
+        .add_plugins(DuelsPlugin::<DefaultDuelsConfig> { default_gamemode: GameMode::Adventure, copy_map: false, phantom: PhantomData })
         .add_plugins(DefaultPlugins)
         .add_plugins((InvBroadcastPlugin, ProjectilePlugin))
         .add_systems(
@@ -48,8 +50,8 @@ fn main() {
         .add_systems(
             Update,
             (
-                gamestage_change.after(lib::duels::gameloop),
-                end_game.after(lib::duels::map::end_game),
+                gamestage_change.after(lib::duels::gameloop::<DefaultDuelsConfig>),
+                end_game.after(lib::duels::map::end_game::<DefaultDuelsConfig>),
                 handle_collision_events,
                 handle_oob_clients,
             ),

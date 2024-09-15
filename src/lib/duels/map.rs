@@ -36,30 +36,32 @@ pub struct MapGlobals {
     pub map_layers: Vec<Entity>,
 }
 
-pub struct MapPlugin;
+pub struct MapPlugin<T: Resource + DuelsConfig> {
+    pub phantom: PhantomData<T>,
+}
 
-impl Plugin for MapPlugin {
+impl<T: Resource + DeserializeOwned + DuelsConfig + Sync + Send + 'static> Plugin for MapPlugin<T> {
     fn build(&self, app: &mut App) {
         app
-            .add_systems(Startup, setup)
+            .add_systems(Startup, setup::<T>)
             .add_systems(Update, (
-                init_clients,
-                start_game.after(init_clients),
-                end_game,
+                init_clients::<T>,
+                start_game::<T>.after(init_clients::<T>),
+                end_game::<T>,
             ))
             .add_systems(PostUpdate, check_queue);
     }
 }
 
-pub fn setup(
+pub fn setup<T: Resource + DuelsConfig>(
     mut commands: Commands,
     server: Res<Server>,
     dimensions: Res<DimensionTypeRegistry>,
     biomes: Res<BiomeRegistry>,
-    config: Res<DuelsConfig>,
+    config: Res<T>,
 ) {
     let mut layers: Vec<Entity> = Vec::new();
-    for world in config.worlds.iter() {
+    for world in config.worlds().iter() {
         let layer = LayerBundle::new(ident!("overworld"), &dimensions, &biomes, &server);
         let mut level = AnvilLevel::new(world.path.clone(), &biomes);
 
@@ -80,7 +82,7 @@ pub fn setup(
     });
 }
 
-pub fn init_clients(
+pub fn init_clients<T: Resource + DuelsConfig>(
     mut clients: Query<
         (
             Entity,
@@ -98,7 +100,7 @@ pub fn init_clients(
     mut server_globals: ResMut<ServerGlobals>,
     globals: Res<MapGlobals>,
     settings: Res<GameSettings>,
-    config: Res<DuelsConfig>,
+    config: Res<T>,
 ) {
     for (
         entity,
@@ -117,7 +119,7 @@ pub fn init_clients(
         layer_id.0 = layer;
         visible_chunk_layer.0 = layer;
         visible_entity_layers.0.insert(layer);
-        pos.set(config.worlds[0].spawns[0].pos);
+        pos.set(config.worlds()[0].spawns[0].pos);
         *game_mode = settings.default_gamemode;
         health.0 = 20.0;
         commands
@@ -156,7 +158,7 @@ pub fn check_queue(
     }
 }
 
-pub fn start_game(
+pub fn start_game<T: Resource + DuelsConfig>(
     mut clients: Query<(
         &mut Client,
         &mut PlayerGameState,
@@ -172,7 +174,7 @@ pub fn start_game(
     entitylayers: Query<Entity, With<EntityLayer>>,
     mut start_game: EventReader<StartGameEvent>,
     globals: Res<MapGlobals>,
-    config: Res<DuelsConfig>,
+    config: Res<T>,
 ) {
     for event in start_game.read() {
         if let Ok((mut map, game_layer, entities)) = games.get_mut(event.0) {
@@ -208,7 +210,7 @@ pub fn start_game(
                 gamestate.game_id = Some(event.0);
                 gamestate.team = i as u8 % 2;
 
-                let spawn = &config.worlds[map_idx].spawns[gamestate.team as usize % 2];
+                let spawn = &config.worlds()[map_idx].spawns[gamestate.team as usize % 2];
                 pos.set(spawn.pos);
                 look.yaw = spawn.rot[0];
                 look.pitch = spawn.rot[1];
@@ -220,7 +222,7 @@ pub fn start_game(
     }
 }
 
-pub fn end_game(
+pub fn end_game<T: Resource + DuelsConfig>(
     mut clients: Query<(
         &mut Client,
         &mut PlayerGameState,
@@ -235,7 +237,7 @@ pub fn end_game(
     mut commands: Commands,
     mut server_globals: ResMut<ServerGlobals>,
     globals: Res<MapGlobals>,
-    config: Res<DuelsConfig>,
+    config: Res<T>,
 ) {
     for event in end_game.read() {
         let Ok((game_layer, entities)) = games.get(event.game_id) else {
@@ -258,7 +260,7 @@ pub fn end_game(
             visible_chunk_layer.0 = globals.map_layers[0];
             visible_entity_layers.0.clear();
             visible_entity_layers.0.insert(globals.map_layers[0]);
-            pos.set(config.worlds[0].spawns[0].pos);
+            pos.set(config.worlds()[0].spawns[0].pos);
             health.0 = 20.0;
 
             if gamestate.team == event.loser {

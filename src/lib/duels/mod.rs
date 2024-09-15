@@ -22,8 +22,7 @@ pub mod map;
 pub mod copied_map;
 
 use bevy_ecs::query::QueryData;
-use serde::Deserialize;
-use serde_json::Value;
+use serde::{de::DeserializeOwned, Deserialize};
 use std::{collections::HashMap, i64, marker::PhantomData, time::SystemTime};
 use valence::{
     entity::living::Health,
@@ -94,20 +93,30 @@ pub struct GameSettings {
     pub default_gamemode: GameMode,
 }
 
-#[derive(Resource, Deserialize)]
-pub struct DuelsConfig {
-    pub worlds: Vec<WorldValue>,
-    pub other: Option<Value>,
+pub trait DuelsConfig {
+    fn worlds(&self) -> &Vec<WorldValue>;
 }
 
-pub struct DuelsPlugin {
+#[derive(Resource, Deserialize)]
+pub struct DefaultDuelsConfig {
+    pub worlds: Vec<WorldValue>,
+}
+
+impl DuelsConfig for DefaultDuelsConfig {
+    fn worlds(&self) -> &Vec<WorldValue> {
+        &self.worlds
+    }
+}
+
+pub struct DuelsPlugin<T: DeserializeOwned + DuelsConfig> {
     pub default_gamemode: GameMode,
     pub copy_map: bool,
+    pub phantom: PhantomData<T>,
 }
 
-impl Plugin for DuelsPlugin {
+impl<T: Resource + DeserializeOwned + DuelsConfig + Sync + Send + 'static> Plugin for DuelsPlugin<T> {
     fn build(&self, app: &mut App) {
-        app.add_plugins(ConfigLoaderPlugin::<DuelsConfig> {
+        app.add_plugins(ConfigLoaderPlugin::<T> {
             phantom: PhantomData,
         })
         .insert_resource(GameSettings {
@@ -122,7 +131,7 @@ impl Plugin for DuelsPlugin {
             (
                 despawn_disconnected_clients,
                 start_game,
-                gamestage_change.after(gameloop),
+                gamestage_change.after(gameloop::<T>),
                 chat_message,
             ),
         )
@@ -130,12 +139,16 @@ impl Plugin for DuelsPlugin {
 
         if self.copy_map {
             app
-                .add_plugins(copied_map::MapPlugin)
-                .add_systems(Update, gameloop.after(map::start_game));
+                .add_plugins(copied_map::MapPlugin::<T> {
+                    phantom: PhantomData,
+                })
+                .add_systems(Update, gameloop::<T>);
         } else {
             app
-                .add_plugins(map::MapPlugin)
-                .add_systems(Update, gameloop);
+                .add_plugins(map::MapPlugin::<T> {
+                    phantom: PhantomData,
+                })
+                .add_systems(Update, gameloop::<T>);
         }
     }
 }
@@ -195,17 +208,17 @@ pub struct GameQuery {
     yaw: &'static mut HeadYaw,
 }
 
-pub fn gameloop(
+pub fn gameloop<T: Resource + DuelsConfig>(
     mut clients: Query<GameQuery>,
     mut games: Query<(Entity, &Entities, &MapIndex, &mut GameStage, &GameTime)>,
     mut gamestage: EventWriter<GameStageEvent>,
-    config: Res<DuelsConfig>,
+    config: Res<T>,
 ) {
     for (game_id, entities, map, mut stage, time) in games.iter_mut() {
         if stage.0 < 4 {
             for entity in entities.0.iter() {
                 if let Ok(mut player) = clients.get_mut(*entity) {
-                    let spawn = &config.worlds[map.0].spawns[player.gamestate.team as usize % 2];
+                    let spawn = &config.worlds()[map.0].spawns[player.gamestate.team as usize % 2];
                     player.pos.set(spawn.pos);
                     player.look.yaw = spawn.rot[0];
                     player.look.pitch = spawn.rot[1];

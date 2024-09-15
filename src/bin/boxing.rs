@@ -21,8 +21,10 @@
 #[path = "../lib/mod.rs"]
 mod lib;
 
+use std::marker::PhantomData;
+
 use bevy_ecs::query::QueryData;
-use lib::duels::{CombatState, DuelsPlugin, EndGameEvent, Entities, PlayerGameState};
+use lib::duels::{CombatState, DefaultDuelsConfig, DuelsPlugin, EndGameEvent, Entities, PlayerGameState};
 use valence::entity::{EntityId, EntityStatuses};
 use valence::math::Vec3Swizzles;
 use valence::prelude::*;
@@ -39,15 +41,15 @@ struct BoxingState {
 
 fn main() {
     App::new()
-        .add_plugins(DuelsPlugin { default_gamemode: GameMode::Adventure, copy_map: false })
+        .add_plugins(DuelsPlugin::<DefaultDuelsConfig> { default_gamemode: GameMode::Adventure, copy_map: false, phantom: PhantomData })
         .add_plugins(DefaultPlugins)
         .add_systems(EventLoopUpdate, handle_combat_events)
         .add_systems(
             Update,
             (
-                init_clients.after(lib::duels::map::init_clients),
+                init_clients.after(lib::duels::map::init_clients::<DefaultDuelsConfig>),
                 handle_oob_clients,
-                end_game.after(lib::duels::map::end_game),
+                end_game.after(lib::duels::map::end_game::<DefaultDuelsConfig>),
             ),
         )
         .run();
