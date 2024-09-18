@@ -46,9 +46,8 @@ impl<T: Resource + DeserializeOwned + DuelsConfig + Sync + Send + 'static> Plugi
             .add_systems(Startup, setup::<T>)
             .add_systems(Update, (
                 init_clients::<T>,
-                end_game::<T>,
             ))
-            .add_systems(PostUpdate, check_queue::<T>);
+            .add_systems(PostUpdate, (check_queue::<T>, end_game::<T>));
     }
 }
 
