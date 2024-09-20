@@ -22,3 +22,4 @@ pub mod projectiles;
 pub mod player;
 pub mod world;
 pub mod color;
+pub mod damage;

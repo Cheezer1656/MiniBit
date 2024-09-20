@@ -21,9 +21,8 @@
 #[path = "../lib/mod.rs"]
 mod lib;
 
+use std::collections::HashSet;
 use std::marker::PhantomData;
-use std::time::SystemTime;
-
 use bevy_ecs::query::QueryData;
 use lib::color::ArmorColors;
 use lib::config::WorldValue;
@@ -34,6 +33,8 @@ use lib::player::*;
 use lib::projectiles::*;
 use lib::world::*;
 use serde::Deserialize;
+use valence::entity::item::ItemEntityBundle;
+use valence::entity::item::Stack;
 use valence::entity::living::Absorption;
 use valence::entity::living::Health;
 use valence::entity::Velocity;
@@ -45,10 +46,8 @@ use valence::inventory::PlayerAction;
 use valence::math::IVec3;
 use valence::math::Vec3Swizzles;
 use valence::nbt::compound;
-use valence::nbt::List;
 use valence::prelude::*;
 use valence::protocol::packets::play::DamageTiltS2c;
-use valence::protocol::packets::play::ExperienceBarUpdateS2c;
 use valence::protocol::packets::play::PlayerActionC2s;
 use valence::protocol::sound::SoundCategory;
 use valence::protocol::Sound;
@@ -59,37 +58,24 @@ use valence::protocol::WritePacket;
 struct DeathEvent(Entity, bool);
 
 #[derive(Event)]
-struct ScoreEvent (Entity);
-
-#[derive(Event)]
 struct MessageEvent {
     game: Entity,
     msg: Text,
 }
 
-#[derive(Component)]
-struct BowStatus {
-    cooldown: i64,
-    slot: u16,
-}
-
-impl Default for BowStatus {
-    fn default() -> Self {
-        Self {
-            cooldown: i64::MAX,
-            slot: 44,
-        }
-    }
+#[derive(Component, Default)]
+struct BedwarsState {
+    bed_broken: bool,
 }
 
 #[derive(Resource, Deserialize)]
-struct BridgeConfig {
+struct BedwarsConfig {
     worlds: Vec<WorldValue>,
-    goals: Vec<[i32; 5]>,
     block_restrictions: Vec<[i32; 6]>,
+    generator_locations: Vec<[f64; 3]>,
 }
 
-impl DuelsConfig for BridgeConfig {
+impl DuelsConfig for BedwarsConfig {
     fn worlds(&self) -> &Vec<WorldValue> {
         &self.worlds
     }
@@ -100,7 +86,7 @@ struct EatingStartTick(pub i64);
 
 fn main() {
     App::new()
-        .add_plugins(DuelsPlugin::<BridgeConfig> {
+        .add_plugins(DuelsPlugin::<BedwarsConfig> {
             default_gamemode: GameMode::Survival,
             copy_map: true,
             phantom: PhantomData,
@@ -112,9 +98,10 @@ fn main() {
             ProjectilePlugin,
             DiggingPlugin {
                 whitelist: vec![
-                    BlockKind::BlueTerracotta,
-                    BlockKind::RedTerracotta,
-                    BlockKind::WhiteTerracotta,
+                    BlockKind::BlueWool,
+                    BlockKind::RedWool,
+                    BlockKind::BlueBed,
+                    BlockKind::RedBed,
                 ],
             },
             PlacingPlugin {
@@ -127,7 +114,6 @@ fn main() {
             },
         ))
         .add_event::<DeathEvent>()
-        .add_event::<ScoreEvent>()
         .add_event::<MessageEvent>()
         .add_systems(Startup, setup)
         .add_systems(EventLoopUpdate, handle_combat_events)
@@ -136,17 +122,16 @@ fn main() {
             (
                 init_clients,
                 start_game,
-                gamestage_change,
                 end_game,
-                check_goals,
-                update_bow_cooldown,
+                gen_iron,
                 set_use_tick,
                 eat_gapple,
                 cancel_gapple,
                 handle_collision_events,
                 handle_death,
+                check_for_winners,
                 play_death_sound.before(handle_death),
-                handle_score.after(check_goals).before(handle_death),
+                handle_bed_break,
                 handle_oob_clients,
                 game_broadcast,
             ),
@@ -154,7 +139,7 @@ fn main() {
         .run();
 }
 
-fn setup(mut commands: Commands, server_config: Res<BridgeConfig>) {
+fn setup(mut commands: Commands, server_config: Res<BedwarsConfig>) {
         let areas = server_config.block_restrictions.iter().map(|area| BlockArea {
             min: IVec3::new(area[0], area[1], area[2]),
             max: IVec3::new(area[3], area[4], area[5]),
@@ -164,12 +149,12 @@ fn setup(mut commands: Commands, server_config: Res<BridgeConfig>) {
 
 fn init_clients(clients: Query<Entity, Added<Client>>, mut commands: Commands) {
     for entity in clients.iter() {
-        commands.entity(entity).insert((EatingStartTick(i64::MAX), BowStatus::default()));
+        commands.entity(entity).insert((EatingStartTick(i64::MAX), BedwarsState::default()));
     }
 }
 
 fn start_game(
-    mut clients: Query<(&mut Inventory, &PlayerGameState), With<Client>>,
+    mut clients: Query<(&mut GameMode, &mut Inventory, &PlayerGameState), With<Client>>,
     mut games: Query<(&Entities, &mut GameData)>,
     mut start_game: EventReader<StartGameEvent>,
 ) {
@@ -179,66 +164,11 @@ fn start_game(
             data.0.insert(1, DataValue::Int(0));
 
             for entity in entities.0.iter() {
-                if let Ok((mut inventory, gamestate)) = clients.get_mut(*entity) {
+                if let Ok((mut gamemode, mut inventory, gamestate)) = clients.get_mut(*entity) {
+                    *gamemode = GameMode::Survival;
                     fill_inventory(&mut inventory, gamestate.team);
                 }
             }
-        }
-    }
-}
-
-fn gamestage_change(
-    mut layers: Query<&mut ChunkLayer>,
-    games: Query<(&MapIndex, &EntityLayerId)>,
-    server_config: Res<BridgeConfig>,
-    mut gamestage: EventReader<GameStageEvent>,
-) {
-    for event in gamestage.read() {
-        let Ok((map_idx, layer_id)) = games.get(event.game_id) else {
-            continue;
-        };
-        let Ok(mut layer) = layers.get_mut(layer_id.0) else {
-            continue;
-        };
-
-        match event.stage {
-            0 | 2 => { // For some reason the blocks are overwritten at the start of the game, so we need to reapply them
-                for i in 0..2 {
-                    let spawn_pos =
-                        DVec3::from_array(server_config.worlds()[map_idx.0].spawns[i].pos);
-                    // Create the cage
-                    for x in -2..=2 {
-                        for y in -1..=3 {
-                            for z in -2..=2 {
-                                if x < -1 || x > 1 || y < 0 || y > 2 || z < -1 || z > 1 {
-                                    layer.set_block(
-                                        spawn_pos + DVec3::new(x as f64, y as f64, z as f64),
-                                        BlockState::GLASS,
-                                    );
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            4 => {
-                // Clear the cages
-                for i in 0..2 {
-                    let spawn_pos =
-                        DVec3::from_array(server_config.worlds()[map_idx.0].spawns[i].pos);
-                    for x in -2..=2 {
-                        for y in -1..=3 {
-                            for z in -2..=2 {
-                                layer.set_block(
-                                    spawn_pos + DVec3::new(x as f64, y as f64, z as f64),
-                                    BlockState::AIR,
-                                );
-                            }
-                        }
-                    }
-                }
-            }
-            _ => {}
         }
     }
 }
@@ -253,11 +183,10 @@ fn fill_inventory(inv: &mut Inventory, team: u8) {
             }
         }
     });
-    let block_type = match team {
-        0 => ItemKind::BlueTerracotta,
-        1 => ItemKind::RedTerracotta,
-        _ => ItemKind::WhiteTerracotta,
-    };
+    inv.set_slot(
+        5,
+        ItemStack::new(ItemKind::LeatherHelmet, 1, armor_nbt.clone()),
+    );
     inv.set_slot(
         6,
         ItemStack::new(ItemKind::LeatherChestplate, 1, armor_nbt.clone()),
@@ -267,31 +196,19 @@ fn fill_inventory(inv: &mut Inventory, team: u8) {
         ItemStack::new(ItemKind::LeatherLeggings, 1, armor_nbt.clone()),
     );
     inv.set_slot(8, ItemStack::new(ItemKind::LeatherBoots, 1, armor_nbt));
-    inv.set_slot(36, ItemStack::new(ItemKind::IronSword, 1, None));
-    inv.set_slot(37, ItemStack::new(ItemKind::Bow, 1, None));
-    inv.set_slot(38, ItemStack::new(ItemKind::DiamondPickaxe, 1, Some(compound! {
-        "Enchantments" => List::Compound(vec! [
-            compound! {
-                "id" => "efficiency",
-                "lvl" => 2
-            }
-        ])
-    })));
-    inv.set_slot(39, ItemStack::new(block_type, 64, None));
-    inv.set_slot(40, ItemStack::new(block_type, 64, None));
-    inv.set_slot(41, ItemStack::new(ItemKind::GoldenApple, 8, None));
-    inv.set_slot(44, ItemStack::new(ItemKind::Arrow, 1, None));
+    inv.set_slot(36, ItemStack::new(ItemKind::WoodenSword, 1, None));
 }
 
 fn end_game(
-    mut clients: Query<&mut Inventory, With<Client>>,
+    mut clients: Query<(&mut GameMode, &mut Inventory), With<Client>>,
     games: Query<&Entities>,
     mut end_game: EventReader<EndGameEvent>,
 ) {
     for event in end_game.read() {
         if let Ok(entities) = games.get(event.game_id) {
             for entity in entities.0.iter() {
-                if let Ok(mut inv) = clients.get_mut(*entity) {
+                if let Ok((mut gamemode, mut inv)) = clients.get_mut(*entity) {
+                    *gamemode = GameMode::Adventure;
                     for slot in 0..inv.slot_count() {
                         inv.set_slot(slot, ItemStack::EMPTY);
                     }
@@ -301,65 +218,22 @@ fn end_game(
     }
 }
 
-fn check_goals(
-    clients: Query<(Entity, &Position, &PlayerGameState), With<Client>>,
-    config: Res<BridgeConfig>,
-    mut scores: EventWriter<ScoreEvent>,
-    mut deaths: EventWriter<DeathEvent>,
-) {
-    for (entity, pos, gamestate) in clients.iter() {
-        if let Some(_) = gamestate.game_id {
-            for (i, goal) in config.goals.iter().enumerate() {
-                if goal[0] <= pos.0.x as i32
-                    && goal[1] >= pos.0.x as i32
-                    && goal[2] == pos.0.y as i32
-                    && goal[3] <= pos.0.z as i32
-                    && goal[4] >= pos.0.z as i32
-                {
-                    if gamestate.team == i as u8 {
-                        deaths.send(DeathEvent(entity, true));
-                    } else {
-                        scores.send(ScoreEvent(entity));
-                    }
-                }
-            }
-        }
-    }
-}
-
-fn update_bow_cooldown(
-    mut clients: Query<(&mut Client, &mut Inventory, &CursorItem, &mut BowStatus)>,
+fn gen_iron(
+    mut commands: Commands,
+    games: Query<&EntityLayerId, With<GameData>>,
+    config: Res<BedwarsConfig>,
     server: Res<Server>,
 ) {
-    for (mut client, mut inv, cursor_item, mut bow_status) in clients.iter_mut() {
-        let tick = server.current_tick();
-        if let Some(slot) = inv.first_slot_with_item(ItemKind::Arrow, 2) {
-            if inv.slot(slot).count > 0 || cursor_item.0.item == ItemKind::Arrow {
-                bow_status.cooldown = tick + 60;
-                bow_status.slot = slot;
-                continue;
-            }
-        }
-        let tick_diff = bow_status.cooldown - tick;
-        if tick_diff % 5 == 0 {
-            client.write_packet(&ExperienceBarUpdateS2c {
-                bar: tick_diff as f32 / 60.0,
-                level: VarInt(0),
-                total_xp: VarInt(0),
-            });
-        } else if tick_diff == 59 {
-            client.write_packet(&ExperienceBarUpdateS2c {
-                bar: 1.0,
-                level: VarInt(0),
-                total_xp: VarInt(0),
-            });
-        }
-        if bow_status.cooldown < tick {
-            inv.set_slot(bow_status.slot, ItemStack::new(ItemKind::Arrow, 1, None));
-            client.write_packet(&ExperienceBarUpdateS2c {
-                bar: 0.0,
-                level: VarInt(0),
-                total_xp: VarInt(0),
+    if server.current_tick() % 40 != 0 {
+        return;
+    }
+    for layer_id in games.iter() {
+        for loc in &config.generator_locations {
+            commands.spawn(ItemEntityBundle {
+                item_stack: Stack(ItemStack::new(ItemKind::IronIngot, 1, None)),
+                position: Position(DVec3::from_array(*loc) + DVec3::new(0.0, 2.0, 0.0)),
+                layer: *layer_id,
+                ..Default::default()
             });
         }
     }
@@ -565,7 +439,7 @@ fn handle_oob_clients(
     mut deaths: EventWriter<DeathEvent>,
 ) {
     for (entity, pos, gamestate) in positions.iter() {
-        if pos.0.y < 75.0 {
+        if pos.0.y < 0.0 {
             if gamestate.game_id.is_some() {
                 deaths.send(DeathEvent(entity, true));
             }
@@ -582,8 +456,10 @@ fn handle_death(
             &mut Health,
             &mut Absorption,
             &mut Inventory,
+            &mut GameMode,
             &Username,
             &PlayerGameState,
+            &BedwarsState,
             &mut CombatState,
         ),
         With<Client>,
@@ -592,7 +468,7 @@ fn handle_death(
     games: Query<&MapIndex>,
     mut deaths: EventReader<DeathEvent>,
     mut broadcasts: EventWriter<MessageEvent>,
-    config: Res<BridgeConfig>,
+    config: Res<BedwarsConfig>,
 ) {
     for DeathEvent(entity, show) in deaths.read() {
         if let Ok((
@@ -602,18 +478,25 @@ fn handle_death(
             mut health,
             mut absorption,
             mut inventory,
+            mut gamemode,
             username,
             gamestate,
+            bedwars_state,
             mut combatstate,
         )) = clients.get_mut(*entity)
         {
             if let Some(game_id) = gamestate.game_id {
                 if let Ok(map_index) = games.get(game_id) {
-                    let spawn = &config.worlds[map_index.0].spawns[gamestate.team as usize];
-                    pos.0 = spawn.pos.into();
-                    look.yaw = spawn.rot[0];
-                    look.pitch = spawn.rot[1];
-                    head_yaw.0 = spawn.rot[0];
+                    if bedwars_state.bed_broken {
+                        *gamemode = GameMode::Spectator;
+                        pos.0 += DVec3::new(0.0, 10.0, 0.0);
+                    } else {
+                        let spawn = &config.worlds[map_index.0].spawns[gamestate.team as usize];
+                        pos.0 = spawn.pos.into();
+                        look.yaw = spawn.rot[0];
+                        look.pitch = spawn.rot[1];
+                        head_yaw.0 = spawn.rot[0];
+                    }
                     health.0 = 20.0;
                     absorption.0 = 0.0;
                     for slot in 0..inventory.slot_count() {
@@ -640,12 +523,43 @@ fn handle_death(
                                 }
                             } else {
                                 Text::from(" has died!").color(Color::GRAY)
-                            },
+                            } + Text::from(if bedwars_state.bed_broken {
+                                " [FINAL]"
+                            } else { "" }).color(Color::DARK_RED),
                         });
                     }
                     combatstate.last_attacker = None;
                 }
             }
+        }
+    }
+}
+
+fn check_for_winners(
+    clients: Query<(&GameMode, &PlayerGameState)>,
+    games: Query<(Entity, &Entities)>,
+    mut end_game: EventWriter<EndGameEvent>,
+) {
+    let games = games.iter();
+    for (game_id, entities) in games {
+        let mut teams_alive = HashSet::new();
+        for entity in entities.0.iter() {
+            if let Ok((gamemode, gamestate)) = clients.get(*entity) {
+                if *gamemode != GameMode::Spectator {
+                    teams_alive.insert(gamestate.team);
+                }
+            }
+        }
+        if teams_alive.len() == 1 {
+            end_game.send(EndGameEvent {
+                game_id,
+                loser: if teams_alive.contains(&0) { 1 } else { 0 },
+            });
+        } else if teams_alive.len() < 1 {
+            end_game.send(EndGameEvent {
+                game_id,
+                loser: 2,
+            });
         }
     }
 }
@@ -676,58 +590,48 @@ fn play_death_sound(
     }
 }
 
-fn handle_score(
-    clients: Query<(&Username, &PlayerGameState), With<Client>>,
-    mut games: Query<(&Entities, &mut GameStage, &mut GameTime, &mut GameData)>,
-    mut scores: EventReader<ScoreEvent>,
-    mut deaths: EventWriter<DeathEvent>,
+fn handle_bed_break(
+    mut clients: Query<(&mut Client, &PlayerGameState)>,
+    mut players: Query<(&mut BedwarsState, &PlayerGameState)>,
+    games: Query<&Entities>,
+    mut break_events: EventReader<BlockBreakEvent>,
     mut broadcasts: EventWriter<MessageEvent>,
-    mut gamestage: EventWriter<GameStageEvent>,
-    mut end_game: EventWriter<EndGameEvent>,
 ) {
-    for ScoreEvent(player) in scores.read() {
-        let Ok((username, gamestate)) = clients.get(*player) else {
-            continue;
-        };
-        let Some(game) = gamestate.game_id else {
-            continue;
-        };
-        let Ok((entities, mut stage, mut time, mut data)) = games.get_mut(game) else {
-            continue;
-        };
-        let team = gamestate.team as usize;
-        let mut score = 0;
-        if let Some(DataValue::Int(old_score)) = data.0.get(&(team)) {
-            score = *old_score + 1;
-        }
-        data.0.insert(team, DataValue::Int(score));
-        for entity in entities.0.iter() {
-            deaths.send(DeathEvent(*entity, false));
-        }
-        broadcasts.send(MessageEvent {
-            game: game,
-            msg: Text::from(username.0.clone()).color(
-                if team == 0 {
-                    Color::BLUE
-                } else {
-                    Color::RED
-                },
-            ) + Text::from(" scored! (").color(Color::GRAY)
-                + Text::from(score.to_string()).color(Color::GOLD)
-                + Text::from("/5)").color(Color::GRAY),
-        });
-        if score >= 5 {
-            end_game.send(EndGameEvent {
-                game_id: game,
-                loser: if team == 0 { 1 } else { 0 },
-            });
-        } else {
-            time.0 = SystemTime::now(); // TODO: Replace with a better solution because the game time is not supposed to keep track of the entire game duration
-            stage.0 = 0;
-            gamestage.send(GameStageEvent {
-                game_id: game,
-                stage: 0,
-            });
+    for &BlockBreakEvent { client, position: _, block } in break_events.read() {
+        if let Ok((mut client, gamestate)) = clients.get_mut(client) {
+            let team = match block {
+                BlockKind::BlueBed => Some(0),
+                BlockKind::RedBed => Some(1),
+                _ => None,
+            };
+            if let Some(team) = team {
+                let Some(game_id) = gamestate.game_id else {
+                    continue;
+                };
+                let Ok(entities) = games.get(game_id) else {
+                    continue;
+                };
+                for entity in entities.0.iter() {
+                    if let Ok((mut bedwars_state, gamestate2)) = players.get_mut(*entity) {
+                        if gamestate2.team == team {
+                            bedwars_state.bed_broken = true;
+                        }
+                    }
+                }
+                client.send_chat_message("You destroyed a bed!");
+                broadcasts.send(MessageEvent {
+                    game: game_id,
+                    msg: Text::from(match team {
+                        0 => "Blue",
+                        1 => "Red",
+                        _ => "",
+                    }).color(match team {
+                        0 => Color::BLUE,
+                        1 => Color::RED,
+                        _ => Color::WHITE,
+                    }) + Text::from(" bed was destroyed!").color(Color::GRAY),
+                });
+            }
         }
     }
 }

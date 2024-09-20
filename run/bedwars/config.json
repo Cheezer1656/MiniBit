@@ -1,0 +1,35 @@
+{
+    "worlds": [
+        {
+            "path": "../worlds/waitingarea",
+            "x_chunks": [-1, 1],
+            "z_chunks": [-1, 1],
+            "spawns": [
+                {
+                    "pos": [0.5, 10.0, 0.5],
+                    "rot": [180.0, 0.0]
+                }
+            ]
+        },
+        {
+            "path": "../worlds/bedwars1",
+            "x_chunks": [-3, 3],
+            "z_chunks": [-3, 2],
+            "spawns": [
+                {
+                    "pos": [29.5, 81.0, -0.5],
+                    "rot": [90.0, 0.0]
+                },
+                {
+                    "pos": [-26.5, 81.0, -0.5],
+                    "rot": [-90.0, 0.0]
+                }
+            ]
+        }
+    ],
+    "block_restrictions": [],
+    "generator_locations": [
+        [32.5, 80, -0.5],
+        [-29.5, 80, -0.5]
+    ]
+}
