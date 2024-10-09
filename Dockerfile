@@ -2,6 +2,7 @@
 FROM amazoncorretto:21-alpine3.20-jdk AS jdk_builder
 WORKDIR /build
 COPY ./velocity .
+RUN chmod +x ./gradlew
 RUN ./gradlew build
 RUN mkdir -p /tmp/dist && cp ./build/libs/*.jar /tmp/dist
 
