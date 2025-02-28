@@ -26,7 +26,7 @@ use std::{
 use minibit_lib::{config::{ConfigLoaderPlugin, WorldValue}, player::*};
 use serde::Deserialize;
 use valence::{
-    entity::{living::Health, player::{PlayerEntityBundle, PlayerModelParts}}, event_loop::PacketEvent, inventory::{ClickSlotEvent, HeldItem}, message::{ChatMessageEvent, SendMessage}, nbt::compound, player_list::{DisplayName, Listed, PlayerListEntryBundle}, prelude::*, protocol::{packets::play::PlayerInteractItemC2s, sound::SoundCategory, Sound}
+    entity::{living::Health, player::{PlayerEntityBundle, PlayerModelParts}}, event_loop::PacketEvent, inventory::{ClickSlotEvent, HeldItem}, message::{ChatMessageEvent, SendMessage}, nbt::{compound, List}, player_list::{DisplayName, Listed, PlayerListEntryBundle}, prelude::*, protocol::{packets::play::PlayerInteractItemC2s, sound::SoundCategory, Sound}
 };
 use valence_anvil::AnvilLevel;
 
@@ -170,9 +170,27 @@ fn setup(
 
     let mut navigator_inv =
         Inventory::with_title(InventoryKind::Generic9x6, "Server Navigator", false);
+    navigator_inv.set_slot(4, ItemStack::new(ItemKind::Compass, 1, Some(compound! {
+        "display" => compound! {
+            "Name" => "{\"text\":\"Games\",\"italic\":false}"
+        },
+    })));
+
+    for i in 45..54 {
+        navigator_inv.set_slot(i as u16, ItemStack::new(ItemKind::GrayStainedGlassPane, 1, None));
+    }
+    for i in (0..4).chain(5..9) {
+        navigator_inv.set_slot(i as u16, ItemStack::new(ItemKind::GrayStainedGlassPane, 1, None));
+    }
+
     for (i, npc) in config.npcs.iter().enumerate() {
+        if i > 20 {
+            break;
+        }
+        let row = i / 7;
+        let col = i % 7;
         navigator_inv.set_slot(
-            i.try_into().unwrap(),
+            (row * 9 + col + 19) as u16,
             ItemStack::new(
                 ItemKind::PlayerHead,
                 1,
@@ -180,6 +198,15 @@ fn setup(
                     "display" => compound! {
                         "Name" => format!("{{\"text\":\"{}\",\"italic\":false}}", npc.name)
                     },
+                    "SkullOwner" => compound! {
+                        "Name" => "Notch",
+                        "Properties" => compound! {
+                            "textures" => List::from(vec![compound! {
+                                "Value" => &npc.skin,
+                                "Signature" => &npc.signature
+                            }])
+                        }
+                    }
                 }),
             ),
         );
