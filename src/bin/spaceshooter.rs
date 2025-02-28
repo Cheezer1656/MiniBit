@@ -16,13 +16,10 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#[path = "../lib/mod.rs"]
-mod lib;
-
 
 use std::marker::PhantomData;
 
-use lib::config::{ConfigLoaderPlugin, EmptyConfig};
+use minibit_lib::config::{ConfigLoaderPlugin, EmptyConfig};
 use valence::{
     entity::{
         entity::NoGravity, falling_block::{FallingBlockEntity, FallingBlockEntityBundle}, ObjectData, Velocity

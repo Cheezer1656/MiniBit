@@ -18,13 +18,10 @@
 
 #![allow(clippy::type_complexity)]
 
-#[path = "../lib/mod.rs"]
-mod lib;
-
 use std::marker::PhantomData;
 
 use bevy_ecs::query::QueryData;
-use lib::duels::{CombatState, DefaultDuelsConfig, DuelsPlugin, EndGameEvent, Entities, PlayerGameState, StartGameEvent};
+use minibit_lib::duels::{CombatState, DefaultDuelsConfig, DuelsPlugin, EndGameEvent, Entities, PlayerGameState, StartGameEvent};
 use valence::entity::living::Health;
 use valence::entity::Velocity;
 use valence::entity::{EntityId, EntityStatuses};

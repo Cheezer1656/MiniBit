@@ -11,45 +11,9 @@ serde_json = "1.0.120"
 valence = { git = "https://github.com/Cheezer1656/valence", rev = "6b0c8f359e4b84742ff129c2b7a898ba6fe7c0c5" }
 valence_anvil = { git = "https://github.com/Cheezer1656/valence", rev = "6b0c8f359e4b84742ff129c2b7a898ba6fe7c0c5" }
 
-[[bin]]
-name = "lobby"
-path = "src/bin/lobby.rs"
-
-[[bin]]
-name = "sumo"
-path = "src/bin/sumo.rs"
-
-[[bin]]
-name = "parkour"
-path = "src/bin/parkour.rs"
-
-[[bin]]
-name = "boxing"
-path = "src/bin/boxing.rs"
-
-[[bin]]
-name = "bowfight"
-path = "src/bin/bowfight.rs"
-
-[[bin]]
-name = "classic"
-path = "src/bin/classic.rs"
-
-[[bin]]
-name = "bridge"
-path = "src/bin/bridge.rs"
-
-[[bin]]
-name = "bedwars"
-path = "src/bin/bedwars.rs"
-
-[[bin]]
-name = "trainchase"
-path = "src/bin/trainchase.rs"
-
-[[bin]]
-name = "spaceshooter"
-path = "src/bin/spaceshooter.rs"
+[lib]
+name = "minibit_lib"
+path = "src/lib/mod.rs"
 
 [profile.dev]
 opt-level = 1

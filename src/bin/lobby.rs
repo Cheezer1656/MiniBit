@@ -18,15 +18,12 @@
 
 #![allow(clippy::type_complexity)]
 
-#[path = "../lib/mod.rs"]
-mod lib;
-
 use std::{
     marker::PhantomData,
     time::{Duration, SystemTime},
 };
 
-use lib::{config::{ConfigLoaderPlugin, WorldValue}, player::*};
+use minibit_lib::{config::{ConfigLoaderPlugin, WorldValue}, player::*};
 use serde::Deserialize;
 use valence::{
     entity::{living::Health, player::{PlayerEntityBundle, PlayerModelParts}}, event_loop::PacketEvent, inventory::{ClickSlotEvent, HeldItem}, message::{ChatMessageEvent, SendMessage}, nbt::compound, player_list::{DisplayName, Listed, PlayerListEntryBundle}, prelude::*, protocol::{packets::play::PlayerInteractItemC2s, sound::SoundCategory, Sound}

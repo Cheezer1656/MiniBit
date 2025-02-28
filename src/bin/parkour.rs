@@ -18,14 +18,11 @@
 
 #![allow(clippy::type_complexity)]
 
-#[path = "../lib/mod.rs"]
-mod lib;
-
 use std::collections::VecDeque;
 use std::marker::PhantomData;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use lib::config::{ConfigLoaderPlugin, EmptyConfig};
+use minibit_lib::config::{ConfigLoaderPlugin, EmptyConfig};
 use valence::prelude::*;
 use valence::protocol::sound::{Sound, SoundCategory};
 use valence::spawn::IsFlat;

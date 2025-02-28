@@ -18,21 +18,18 @@
 
 #![allow(clippy::type_complexity)]
 
-#[path = "../lib/mod.rs"]
-mod lib;
-
 use std::marker::PhantomData;
 use std::time::SystemTime;
 
 use bevy_ecs::query::QueryData;
-use lib::color::ArmorColors;
-use lib::config::WorldValue;
-use lib::damage::calc_dmg;
-use lib::damage::calc_dmg_with_weapon;
-use lib::duels::*;
-use lib::player::*;
-use lib::projectiles::*;
-use lib::world::*;
+use minibit_lib::color::ArmorColors;
+use minibit_lib::config::WorldValue;
+use minibit_lib::damage::calc_dmg;
+use minibit_lib::damage::calc_dmg_with_weapon;
+use minibit_lib::duels::*;
+use minibit_lib::player::*;
+use minibit_lib::projectiles::*;
+use minibit_lib::world::*;
 use serde::Deserialize;
 use valence::entity::living::Absorption;
 use valence::entity::living::Health;

@@ -18,15 +18,12 @@
 
 #![allow(clippy::type_complexity)]
 
-#[path = "../lib/mod.rs"]
-mod lib;
-
 use std::{
     marker::PhantomData,
     time::{Duration, Instant},
 };
 
-use lib::config::{ConfigLoaderPlugin, EmptyConfig};
+use minibit_lib::config::{ConfigLoaderPlugin, EmptyConfig};
 use valence::{
     entity::{
         entity::{self, NoGravity},

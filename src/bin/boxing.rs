@@ -18,13 +18,10 @@
 
 #![allow(clippy::type_complexity)]
 
-#[path = "../lib/mod.rs"]
-mod lib;
-
 use std::marker::PhantomData;
 
 use bevy_ecs::query::QueryData;
-use lib::duels::{CombatState, DefaultDuelsConfig, DuelsPlugin, EndGameEvent, Entities, PlayerGameState};
+use minibit_lib::duels::{CombatState, DefaultDuelsConfig, DuelsPlugin, EndGameEvent, Entities, PlayerGameState};
 use valence::entity::{EntityId, EntityStatuses};
 use valence::math::Vec3Swizzles;
 use valence::prelude::*;
@@ -47,9 +44,9 @@ fn main() {
         .add_systems(
             Update,
             (
-                init_clients.after(lib::duels::map::init_clients::<DefaultDuelsConfig>),
+                init_clients.after(minibit_lib::duels::map::init_clients::<DefaultDuelsConfig>),
                 handle_oob_clients,
-                end_game.after(lib::duels::map::end_game::<DefaultDuelsConfig>),
+                end_game.after(minibit_lib::duels::map::end_game::<DefaultDuelsConfig>),
             ),
         )
         .run();

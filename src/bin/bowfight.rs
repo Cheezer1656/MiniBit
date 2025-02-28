@@ -18,15 +18,12 @@
 
 #![allow(clippy::type_complexity)]
 
-#[path = "../lib/mod.rs"]
-mod lib;
-
 use std::marker::PhantomData;
 
 use bevy_ecs::query::QueryData;
-use lib::duels::*;
-use lib::player::InvBroadcastPlugin;
-use lib::projectiles::*;
+use minibit_lib::duels::*;
+use minibit_lib::player::InvBroadcastPlugin;
+use minibit_lib::projectiles::*;
 use valence::entity::living::Health;
 use valence::entity::Velocity;
 use valence::entity::{EntityId, EntityStatuses};
@@ -50,8 +47,8 @@ fn main() {
         .add_systems(
             Update,
             (
-                gamestage_change.after(lib::duels::gameloop::<DefaultDuelsConfig>),
-                end_game.after(lib::duels::map::end_game::<DefaultDuelsConfig>),
+                gamestage_change.after(minibit_lib::duels::gameloop::<DefaultDuelsConfig>),
+                end_game.after(minibit_lib::duels::map::end_game::<DefaultDuelsConfig>),
                 handle_collision_events,
                 handle_oob_clients,
             ),
