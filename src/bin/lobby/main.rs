@@ -96,7 +96,7 @@ fn main() {
             phantom: PhantomData,
         })
         .add_plugins(DefaultPlugins)
-        .add_plugins((ScopePlugin, commands::CommandPlugin, InvBroadcastPlugin, DisableDropPlugin))
+        .add_plugins((ScopePlugin, commands::CommandPlugin, InvBroadcastPlugin))
         .insert_resource(ServerGlobals {
             navigator_gui: None,
         })
@@ -170,8 +170,8 @@ fn setup(
         });
     }
 
-    let mut navigator_inv =
-        Inventory::with_title(InventoryKind::Generic9x6, "Server Navigator", false);
+    let mut navigator_inv = Inventory::with_title(InventoryKind::Generic9x6, "Server Navigator");
+    navigator_inv.readonly = true;
     navigator_inv.set_slot(4, ItemStack::new(ItemKind::Compass, 1, Some(compound! {
         "display" => compound! {
             "Name" => "{\"text\":\"Games\",\"italic\":false}"
@@ -269,7 +269,9 @@ fn init_clients(
                     },
                 }),
             ),
-        )
+        );
+
+        inv.readonly = true;
     }
 }
 

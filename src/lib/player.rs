@@ -16,13 +16,10 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-
-use std::borrow::Cow;
-
 use valence::{
-    entity::{living::LivingFlags, EntityId}, event_loop::PacketEvent, interact_item::InteractItemEvent, inventory::{ClientInventoryState, DropItemStackEvent, HeldItem, PlayerAction}, prelude::*, protocol::{
+    entity::{living::LivingFlags, EntityId}, event_loop::PacketEvent, interact_item::InteractItemEvent, inventory::{DropItemStackEvent, HeldItem, PlayerAction}, prelude::*, protocol::{
         packets::play::{
-            entity_equipment_update_s2c::EquipmentEntry, ClickSlotC2s, EntityEquipmentUpdateS2c, InventoryS2c, PlayerActionC2s, UpdateSelectedSlotC2s
+            entity_equipment_update_s2c::EquipmentEntry, ClickSlotC2s, EntityEquipmentUpdateS2c, PlayerActionC2s, UpdateSelectedSlotC2s
         },
         VarInt, WritePacket,
     }
@@ -148,11 +145,11 @@ impl Plugin for DisableDropPlugin {
 }
 
 fn handle_drop(
-    mut clients: Query<(&mut Client, &mut Inventory, &ClientInventoryState, &mut CursorItem)>,
+    mut clients: Query<(&mut Inventory, &mut CursorItem)>,
     mut drop_events: EventReader<DropItemStackEvent>,
 ) {
     for event in drop_events.read() {
-        if let Ok((mut client, mut inv, inv_state, mut cursor_item)) = clients.get_mut(event.client) {
+        if let Ok((mut inv, mut cursor_item)) = clients.get_mut(event.client) {
             if let Some(slot) = event.from_slot {
                 if inv.slot(slot).item == event.stack.item {
                     let count = inv.slot(slot).count;
@@ -163,21 +160,7 @@ fn handle_drop(
             } else {
                 cursor_item.0 = event.stack.clone();
             }
-            resync_inv(&mut client, &inv, inv_state, &cursor_item);
+            inv.changed = u64::MAX;
         }
     }
-}
-
-pub fn resync_inv(
-    client: &mut Client,
-    client_inv: &Inventory,
-    inv_state: &ClientInventoryState,
-    cursor_item: &CursorItem,
-) {
-    client.write_packet(&InventoryS2c {
-        window_id: 0,
-        state_id: VarInt(inv_state.state_id().0),
-        slots: Cow::Borrowed(client_inv.slot_slice()),
-        carried_item: Cow::Borrowed(&cursor_item.0),
-    });
 }
