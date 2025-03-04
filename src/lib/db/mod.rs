@@ -16,12 +16,31 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-pub mod config;
-pub mod duels;
-pub mod projectiles;
-pub mod player;
-pub mod world;
-pub mod color;
-pub mod damage;
-pub mod scopes;
-pub mod db;
+#[allow(private_interfaces)]
+
+pub mod models;
+pub mod schema;
+
+use std::sync::Mutex;
+use diesel::prelude::*;
+use valence::prelude::*;
+
+#[derive(Resource)]
+pub struct Database(pub Mutex<PgConnection>);
+
+pub struct DatabasePlugin {
+    connection_string: &'static str,
+}
+
+impl DatabasePlugin {
+    pub fn new(connection_string: &'static str) -> Self {
+        Self { connection_string }
+    }
+}
+
+impl Plugin for DatabasePlugin {
+    fn build(&self, app: &mut App) {
+        let db = PgConnection::establish(self.connection_string).unwrap();
+        app.insert_resource(Database(Mutex::new(db)));
+    }
+}
