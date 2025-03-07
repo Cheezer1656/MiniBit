@@ -36,6 +36,7 @@ use valence::entity::living::Absorption;
 use valence::entity::living::Health;
 use valence::entity::Velocity;
 use valence::entity::{EntityId, EntityStatuses};
+use valence::equipment::EquipmentInventorySync;
 use valence::event_loop::PacketEvent;
 use valence::interact_item::InteractItemEvent;
 use valence::inventory::HeldItem;
@@ -90,7 +91,7 @@ fn main() {
         })
         .add_plugins(DefaultPlugins)
         .add_plugins((
-            InvBroadcastPlugin,
+            InteractionBroadcastPlugin,
             DisableDropPlugin,
             ProjectilePlugin,
             DiggingPlugin {
@@ -146,7 +147,7 @@ fn setup(mut commands: Commands, server_config: Res<BedwarsConfig>) {
 
 fn init_clients(clients: Query<Entity, Added<Client>>, mut commands: Commands) {
     for entity in clients.iter() {
-        commands.entity(entity).insert((EatingStartTick(i64::MAX), BedwarsState::default()));
+        commands.entity(entity).insert((EquipmentInventorySync, EatingStartTick(i64::MAX), BedwarsState::default()));
     }
 }
 

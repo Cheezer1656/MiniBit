@@ -22,11 +22,12 @@ use std::marker::PhantomData;
 
 use bevy_ecs::query::QueryData;
 use minibit_lib::duels::*;
-use minibit_lib::player::InvBroadcastPlugin;
+use minibit_lib::player::InteractionBroadcastPlugin;
 use minibit_lib::projectiles::*;
 use valence::entity::living::Health;
 use valence::entity::Velocity;
 use valence::entity::{EntityId, EntityStatuses};
+use valence::equipment::EquipmentInventorySync;
 use valence::math::Vec3Swizzles;
 use valence::prelude::*;
 use valence::protocol::packets::play::DamageTiltS2c;
@@ -39,7 +40,7 @@ fn main() {
     App::new()
         .add_plugins(DuelsPlugin::<DefaultDuelsConfig> { default_gamemode: GameMode::Adventure, copy_map: false, phantom: PhantomData })
         .add_plugins(DefaultPlugins)
-        .add_plugins((InvBroadcastPlugin, ProjectilePlugin))
+        .add_plugins((InteractionBroadcastPlugin, ProjectilePlugin))
         .add_systems(
             EventLoopUpdate,
             handle_combat_events,
@@ -47,6 +48,7 @@ fn main() {
         .add_systems(
             Update,
             (
+                init_clients,
                 gamestage_change.after(minibit_lib::duels::gameloop::<DefaultDuelsConfig>),
                 end_game.after(minibit_lib::duels::map::end_game::<DefaultDuelsConfig>),
                 handle_collision_events,
@@ -54,6 +56,12 @@ fn main() {
             ),
         )
         .run();
+}
+
+fn init_clients(clients: Query<Entity, Added<Client>>, mut commands: Commands) {
+    for client in clients.iter() {
+        commands.entity(client).insert(EquipmentInventorySync);
+    }
 }
 
 fn gamestage_change(

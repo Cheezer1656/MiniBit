@@ -96,7 +96,7 @@ fn main() {
             phantom: PhantomData,
         })
         .add_plugins(DefaultPlugins)
-        .add_plugins((ScopePlugin, commands::CommandPlugin, InvBroadcastPlugin))
+        .add_plugins((ScopePlugin, commands::CommandPlugin, InteractionBroadcastPlugin))
         .insert_resource(ServerGlobals {
             navigator_gui: None,
         })
