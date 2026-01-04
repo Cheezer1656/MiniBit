@@ -22,7 +22,7 @@ use valence::{
     prelude::*,
 };
 
-use crate::LobbyConfig;
+use crate::lobby::LobbyConfig;
 
 #[derive(Command, Debug, Clone)]
 #[paths("stuck")]

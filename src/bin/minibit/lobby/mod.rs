@@ -24,13 +24,14 @@ use std::{
     marker::PhantomData,
     time::{Duration, SystemTime},
 };
-
+use std::path::PathBuf;
 use minibit_lib::{config::{ConfigLoaderPlugin, WorldValue}, player::*, scopes::ScopePlugin};
 use serde::Deserialize;
 use valence::{
     entity::{living::Health, player::{PlayerEntityBundle, PlayerModelParts}}, event_loop::PacketEvent, inventory::{ClickSlotEvent, HeldItem}, message::{ChatMessageEvent, SendMessage}, nbt::{compound, List}, player_list::{DisplayName, Listed, PlayerListEntryBundle}, prelude::*, protocol::{packets::play::PlayerInteractItemC2s, sound::SoundCategory, Sound}
 };
 use valence_anvil::AnvilLevel;
+use minibit_lib::config::DataPath;
 
 #[derive(Deserialize, Clone)]
 enum ActionType {
@@ -90,9 +91,10 @@ struct ParkourStatus {
     end: DVec3,
 }
 
-fn main() {
+pub fn main(path: PathBuf) {
     App::new()
         .add_plugins(ConfigLoaderPlugin::<LobbyConfig> {
+            path,
             phantom: PhantomData,
         })
         .add_plugins(DefaultPlugins)
@@ -125,10 +127,11 @@ fn setup(
     biomes: Res<BiomeRegistry>,
     server: Res<Server>,
     config: Res<LobbyConfig>,
+    data_path: Res<DataPath>,
     mut globals: ResMut<ServerGlobals>,
 ) {
     let layer = LayerBundle::new(ident!("overworld"), &dimensions, &biomes, &server);
-    let mut level = AnvilLevel::new(&config.world.path, &biomes);
+    let mut level = AnvilLevel::new(data_path.0.join(&config.world.path), &biomes);
 
     for z in config.world.z_chunks[0]..=config.world.z_chunks[1] {
         for x in config.world.x_chunks[0]..=config.world.x_chunks[1] {

@@ -18,7 +18,7 @@
 
 
 use std::marker::PhantomData;
-
+use std::path::PathBuf;
 use minibit_lib::config::{ConfigLoaderPlugin, EmptyConfig};
 use valence::{
     entity::{
@@ -35,9 +35,9 @@ struct GameState {
     score: u32,
 }
 
-fn main() {
+pub fn main(path: PathBuf) {
     App::new()
-        .add_plugins(ConfigLoaderPlugin::<EmptyConfig> { phantom: PhantomData })
+        .add_plugins(ConfigLoaderPlugin::<EmptyConfig> { path, phantom: PhantomData })
         .add_plugins(DefaultPlugins)
         .add_systems(
             Update,

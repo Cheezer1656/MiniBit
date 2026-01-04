@@ -6,6 +6,7 @@ edition = "2021"
 [dependencies]
 bigdecimal = "0.4.7"
 chrono = "0.4.40"
+clap = { version = "4.5.54", features = ["derive"] }
 diesel = { version = "2.2.7", features = ["chrono", "numeric", "postgres", "serde_json"] }
 fastrand = "2.1.0"
 parry3d = "0.17.0"

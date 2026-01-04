@@ -24,6 +24,7 @@ pub mod copied_map;
 use bevy_ecs::query::QueryData;
 use serde::{de::DeserializeOwned, Deserialize};
 use std::{collections::HashMap, i64, marker::PhantomData, time::SystemTime};
+use std::path::PathBuf;
 use valence::{
     entity::living::Health,
     message::ChatMessageEvent,
@@ -109,6 +110,7 @@ impl DuelsConfig for DefaultDuelsConfig {
 }
 
 pub struct DuelsPlugin<T: DeserializeOwned + DuelsConfig> {
+    pub path: PathBuf,
     pub default_gamemode: GameMode,
     pub copy_map: bool,
     pub phantom: PhantomData<T>,
@@ -117,6 +119,7 @@ pub struct DuelsPlugin<T: DeserializeOwned + DuelsConfig> {
 impl<T: Resource + DeserializeOwned + DuelsConfig + Sync + Send + 'static> Plugin for DuelsPlugin<T> {
     fn build(&self, app: &mut App) {
         app.add_plugins(ConfigLoaderPlugin::<T> {
+            path: self.path.clone(),
             phantom: PhantomData,
         })
         .insert_resource(GameSettings {

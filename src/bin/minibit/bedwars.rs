@@ -20,6 +20,7 @@
 
 use std::collections::HashSet;
 use std::marker::PhantomData;
+use std::path::PathBuf;
 use bevy_ecs::query::QueryData;
 use minibit_lib::color::ArmorColors;
 use minibit_lib::config::WorldValue;
@@ -82,9 +83,10 @@ impl DuelsConfig for BedwarsConfig {
 #[derive(Component)]
 struct EatingStartTick(pub i64);
 
-fn main() {
+pub fn main(path: PathBuf) {
     App::new()
         .add_plugins(DuelsPlugin::<BedwarsConfig> {
+            path,
             default_gamemode: GameMode::Survival,
             copy_map: true,
             phantom: PhantomData,

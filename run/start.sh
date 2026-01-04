@@ -2,19 +2,19 @@
 
 cd $(dirname "$0")
 
-declare -A servers
-declare  -i port=25566
+result=""
+declare -i port=25566
 for file in ./bin/*; do
-    port+=1
     name=$(basename "$file")
-    servers["$name"]=$port
 
     # Check if the subdirectory exists
     if [ -d "./$name" ]; then
+        port+=1
+        result+="$name = \"127.0.0.1:$port\"\n"
         (
             cd "./$name"
-            sed -i "s/25565/$port/g" server.json
-            sed -i '0,/"connection_mode": 1/s//"connection_mode": 3/' server.json
+            sed -i "" "s/25565/$port/g" server.json
+            sed -i "" 's#"connection_mode": 1#"connection_mode": 3#g' server.json
             echo "Starting $name on port $port"
             "../bin/$name" &
         )
@@ -23,18 +23,13 @@ for file in ./bin/*; do
     fi
 done
 
-result=""
-for server in "${!servers[@]}"; do
-    result+="$server = \"127.0.0.1:${servers[$server]}\"\n"
-done
-
 # Remove the last newline
 result=$(echo -e "$result" | sed '$d')
 
 # Escape the newlines
 result=${result//$'\n'/\\n}
 
-sed -i "0,/lobby = \"127.0.0.1:25566\"/s//$result/" ./proxy/velocity.toml
+sed -i "" "s/lobby = \"127.0.0.1:25566\"/$result/g" ./proxy/velocity.toml
 
 cd ./proxy
 $JAVA_HOME/bin/java -jar ./velocity.jar &
