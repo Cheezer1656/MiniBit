@@ -22,7 +22,7 @@ use std::{
     marker::PhantomData,
     time::{Duration, Instant},
 };
-
+use std::path::PathBuf;
 use minibit_lib::config::{ConfigLoaderPlugin, EmptyConfig};
 use valence::{
     entity::{
@@ -81,9 +81,10 @@ struct IsCop;
 #[derive(Component)]
 struct Owner(Entity);
 
-fn main() {
+pub fn main(path: PathBuf) {
     App::new()
         .add_plugins(ConfigLoaderPlugin::<EmptyConfig> {
+            path,
             phantom: PhantomData,
         })
         .add_plugins(DefaultPlugins)

@@ -20,6 +20,7 @@
 
 use std::collections::VecDeque;
 use std::marker::PhantomData;
+use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use minibit_lib::config::{ConfigLoaderPlugin, EmptyConfig};
@@ -40,9 +41,9 @@ const BLOCK_TYPES: [BlockState; 7] = [
     BlockState::MOSS_BLOCK,
 ];
 
-fn main() {
+pub fn main(path: PathBuf) {
     App::new()
-        .add_plugins(ConfigLoaderPlugin::<EmptyConfig> { phantom: PhantomData })
+        .add_plugins(ConfigLoaderPlugin::<EmptyConfig> { path, phantom: PhantomData })
         .add_plugins(DefaultPlugins)
         .add_systems(
             Update,

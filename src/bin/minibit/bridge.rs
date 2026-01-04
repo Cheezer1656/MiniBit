@@ -19,6 +19,7 @@
 #![allow(clippy::type_complexity)]
 
 use std::marker::PhantomData;
+use std::path::PathBuf;
 use std::time::SystemTime;
 
 use bevy_ecs::query::QueryData;
@@ -96,9 +97,10 @@ impl DuelsConfig for BridgeConfig {
 #[derive(Component)]
 struct EatingStartTick(pub i64);
 
-fn main() {
+pub fn main(path: PathBuf) {
     App::new()
         .add_plugins(DuelsPlugin::<BridgeConfig> {
+            path,
             default_gamemode: GameMode::Survival,
             copy_map: true,
             phantom: PhantomData,

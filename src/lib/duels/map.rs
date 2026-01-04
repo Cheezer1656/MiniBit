@@ -18,7 +18,7 @@
 
 use valence::prelude::*;
 use valence_anvil::AnvilLevel;
-
+use crate::config::DataPath;
 use super::*;
 
 #[derive(Bundle)]
@@ -58,11 +58,12 @@ pub fn setup<T: Resource + DuelsConfig>(
     dimensions: Res<DimensionTypeRegistry>,
     biomes: Res<BiomeRegistry>,
     config: Res<T>,
+    data_path: Res<DataPath>,
 ) {
     let mut layers: Vec<Entity> = Vec::new();
     for world in config.worlds().iter() {
         let layer = LayerBundle::new(ident!("overworld"), &dimensions, &biomes, &server);
-        let mut level = AnvilLevel::new(world.path.clone(), &biomes);
+        let mut level = AnvilLevel::new(data_path.0.join(world.path.clone()), &biomes);
 
         for z in world.z_chunks[0]..=world.z_chunks[1] {
             for x in world.x_chunks[0]..=world.x_chunks[1] {

@@ -19,7 +19,6 @@
 use std::{
     marker::PhantomData, net::{IpAddr, SocketAddr}, path::PathBuf, str::FromStr, sync::Arc
 };
-
 use ::serde::Deserialize;
 use serde::de::DeserializeOwned;
 use valence::{network::NetworkSettings, prelude::*, CompressionThreshold, ServerSettings};
@@ -51,22 +50,26 @@ pub struct SpawnValue {
     pub rot: [f32; 2],
 }
 
+#[derive(Resource)]
+pub struct DataPath(pub PathBuf);
+
 pub struct ConfigLoaderPlugin<T: DeserializeOwned> {
+    pub path: PathBuf,
     pub phantom: PhantomData<T>,
 }
 
 impl<T: Resource + DeserializeOwned + Sync + Send + 'static> Plugin for ConfigLoaderPlugin<T> {
     fn build(&self, app: &mut App) {
-        let data = std::fs::read_to_string("server.json").unwrap();
+        let data = std::fs::read_to_string(self.path.join("server.json")).unwrap();
         let netconfig = serde_json::from_str::<NetworkConfig>(&data).unwrap();
 
         let secret = if netconfig.connection_mode == 3 {
-            std::fs::read_to_string(netconfig.secret_file).expect("Failed to read secret file")
+            std::fs::read_to_string(self.path.join(netconfig.secret_file)).expect("Failed to read secret file")
         } else {
             String::new()
         };
 
-        let data = std::fs::read_to_string("config.json").unwrap();
+        let data = std::fs::read_to_string(self.path.join("config.json")).unwrap();
         let config = serde_json::from_str::<T>(&data).unwrap();
 
         app.insert_resource(ServerSettings {
@@ -88,6 +91,7 @@ impl<T: Resource + DeserializeOwned + Sync + Send + 'static> Plugin for ConfigLo
             },
             ..Default::default()
         })
-        .insert_resource(config);
+        .insert_resource(config)
+        .insert_resource(DataPath(self.path.clone()));
     }
 }

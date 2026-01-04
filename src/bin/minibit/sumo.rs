@@ -19,61 +19,24 @@
 #![allow(clippy::type_complexity)]
 
 use std::marker::PhantomData;
-
+use std::path::PathBuf;
 use bevy_ecs::query::QueryData;
-use minibit_lib::duels::{CombatState, DefaultDuelsConfig, DuelsPlugin, EndGameEvent, Entities, PlayerGameState, StartGameEvent};
-use valence::entity::living::Health;
-use valence::entity::Velocity;
+use minibit_lib::duels::{CombatState, DefaultDuelsConfig, DuelsPlugin, EndGameEvent, PlayerGameState};
 use valence::entity::{EntityId, EntityStatuses};
 use valence::math::Vec3Swizzles;
 use valence::prelude::*;
 use valence::protocol::packets::play::DamageTiltS2c;
 use valence::protocol::sound::SoundCategory;
-use valence::protocol::Sound;
+use valence::protocol::{Sound, WritePacket};
 use valence::protocol::VarInt;
-use valence::protocol::WritePacket;
 
-fn main() {
+pub fn main(path: PathBuf) {
     App::new()
-        .add_plugins(DuelsPlugin::<DefaultDuelsConfig> { default_gamemode: GameMode::Adventure, copy_map: false, phantom: PhantomData })
+        .add_plugins(DuelsPlugin::<DefaultDuelsConfig> { path, default_gamemode: GameMode::Adventure, copy_map: false, phantom: PhantomData })
         .add_plugins(DefaultPlugins)
         .add_systems(EventLoopUpdate, handle_combat_events)
-        .add_systems(Update, (start_game, end_game, handle_oob_clients))
+        .add_systems(Update, handle_oob_clients)
         .run();
-}
-
-fn start_game(
-    mut clients: Query<&mut Inventory>,
-    games: Query<&Entities>,
-    mut start_game: EventReader<StartGameEvent>,
-) {
-    for event in start_game.read() {
-        if let Ok(entities) = games.get(event.0) {
-            for entity in entities.0.iter() {
-                if let Ok(mut inv) = clients.get_mut(*entity) {
-                    inv.set_slot(36, ItemStack::new(ItemKind::IronSword, 1, None));
-                }
-            }
-        }
-    }
-}
-
-fn end_game(
-    mut clients: Query<&mut Inventory>,
-    games: Query<&Entities>,
-    mut start_game: EventReader<StartGameEvent>,
-) {
-    for event in start_game.read() {
-        if let Ok(entities) = games.get(event.0) {
-            for entity in entities.0.iter() {
-                if let Ok(mut inv) = clients.get_mut(*entity) {
-                    for slot in 0..inv.slot_count() {
-                        inv.set_slot(slot, ItemStack::EMPTY);
-                    }
-                }
-            }
-        }
-    }
 }
 
 #[derive(QueryData)]
@@ -82,8 +45,6 @@ struct CombatQuery {
     client: &'static mut Client,
     id: &'static EntityId,
     pos: &'static Position,
-    vel: &'static mut Velocity,
-    health: &'static mut Health,
     state: &'static mut CombatState,
     statuses: &'static mut EntityStatuses,
     gamestate: &'static PlayerGameState,
@@ -94,7 +55,6 @@ fn handle_combat_events(
     mut clients: Query<CombatQuery>,
     mut sprinting: EventReader<SprintEvent>,
     mut interact_entity: EventReader<InteractEntityEvent>,
-    mut end_game: EventWriter<EndGameEvent>,
 ) {
     for &SprintEvent { client, state } in sprinting.read() {
         if let Ok(mut client) = clients.get_mut(client) {
@@ -142,16 +102,6 @@ fn handle_combat_events(
         victim
             .client
             .set_velocity([dir.x * knockback_xz, knockback_y, dir.y * knockback_xz]);
-
-        let damage = 5.83;
-        if victim.health.0 > damage {
-            victim.health.0 -= damage;
-        } else {
-            end_game.send(EndGameEvent {
-                game_id: victim.gamestate.game_id.unwrap(),
-                loser: victim.gamestate.team,
-            });
-        }
 
         attacker.state.has_bonus_knockback = false;
 
