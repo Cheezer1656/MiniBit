@@ -11,7 +11,7 @@ for file in **/server.json; do
     result+="    $name: localhost:$port\n"
     (
         cd "./$name"
-`        config=$(<server.json)
+`       config=$(<server.json)
         config=${config//25565/$port}
         config=${config//\"connection_mode\": 1/\"connection_mode\": 3}
 
@@ -22,7 +22,6 @@ done
 # Remove the last newline
 result=$(echo -e "$result" | sed '$d')
 
-# Escape the newlines
-result=${result//$'\n'/\\n}
-
-sed -i "" "s/    lobby: localhost:25565/$result/g" ./proxy/config.yml
+proxy_config=$(<proxy/config.yml)
+proxy_config=${proxy_config//    lobby: localhost:25565/$result}
+echo "$proxy_config" > proxy/config.yml
