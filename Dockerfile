@@ -1,13 +1,12 @@
-# Build Velocity plugin
-FROM amazoncorretto:21-alpine3.20-jdk AS jdk_builder
+# Build gate
+FROM golang:1.25-trixie as gate_builder
 WORKDIR /build
-COPY ./velocity .
-RUN chmod +x ./gradlew
-RUN ./gradlew build
-RUN mkdir -p /tmp/dist && cp ./build/libs/*.jar /tmp/dist
+COPY ./gate .
+RUN GOOS=linux GOARCH=arm64 go build -ldfalgs="-s -w"
+RUN mkdir -p /tmp/dist && cp gate /tmp/dist
 
 # Install cargo-chef
-FROM clux/muslrust:stable AS chef
+FROM blackdex/rust-musl:aarch64-musl AS chef
 USER root
 RUN cargo install cargo-chef
 WORKDIR /build
@@ -20,10 +19,10 @@ RUN cargo chef prepare --recipe-path recipe.json
 # Build the secretgen tool
 FROM chef AS builder1
 COPY --from=planner1 /build/recipe.json recipe.json
-RUN cargo chef cook --release --target x86_64-unknown-linux-musl --recipe-path recipe.json
+RUN cargo chef cook --release --target aarch64-unknown-linux-musl --recipe-path recipe.json
 COPY ./tools/secretgen .
-RUN cargo build --release --target x86_64-unknown-linux-musl
-RUN mkdir -p /tmp/dist && cp target/x86_64-unknown-linux-musl/release/secretgen /tmp/dist/secretgen
+RUN cargo build --release --target aarch64-unknown-linux-musl
+RUN mkdir -p /tmp/dist && cp target/aarch64-unknown-linux-musl/release/secretgen /tmp/dist/secretgen
 
 # Prepare the build recipe for the servers
 FROM chef AS planner2
@@ -33,24 +32,22 @@ RUN cargo chef prepare --recipe-path recipe.json
 # Build the servers
 FROM chef AS builder2
 COPY --from=planner2 /build/recipe.json recipe.json
-RUN cargo chef cook --release --target x86_64-unknown-linux-musl --recipe-path recipe.json
+RUN cargo chef cook --release --target aarch64-unknown-linux-musl --recipe-path recipe.json
 COPY . .
-RUN cargo build --release --target x86_64-unknown-linux-musl
-RUN ["bash", "-O", "extglob", "-c", "mkdir -p /tmp/dist && cp target/x86_64-unknown-linux-musl/release/!(*.*) /tmp/dist || true"]
+RUN cargo build --release --target aarch64-unknown-linux-musl
+RUN ["bash", "-O", "extglob", "-c", "mkdir -p /tmp/dist && cp target/aarch64-unknown-linux-musl/release/!(*.*) /tmp/dist || true"]
 
 # Build the runtime image
-FROM amazoncorretto:22-alpine3.20 AS runtime
-RUN apk update && apk add build-base dumb-init curl bash sed
+FROM alpine:3.23 AS runtime
+RUN apk update && apk add build-base dumb-init bash sed
 WORKDIR /app
 COPY ./run .
-RUN mkdir -p ./proxy/plugins
-RUN curl --output ./proxy/velocity.jar "https://api.papermc.io/v2/projects/velocity/versions/3.3.0-SNAPSHOT/builds/415/downloads/velocity-3.3.0-SNAPSHOT-415.jar"
-COPY --from=jdk_builder /tmp/dist ./proxy/plugins/
 RUN mkdir -p ./bin
+COPY --from=gate_builder /tmp/dist/gate bin/
 COPY --from=builder2 /tmp/dist bin/
 COPY --from=builder1 /tmp/dist/secretgen /tmp/secretgen
 RUN /tmp/secretgen > ./proxy/forwarding.secret
-RUN chmod +x ./start.sh
+RUN chmod +x ./configure.sh
 
 EXPOSE 25565
 CMD "./start.sh"
