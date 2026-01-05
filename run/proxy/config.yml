@@ -1,0 +1,14 @@
+# This is a simplified config where the rest of the settings are omitted and will be set by default.
+# See https://gate.minekube.com/guide/config/ for the full configuration options.
+config:
+  bind: 0.0.0.0:25565
+  onlineMode: true
+  servers:
+    lobby: localhost:25565
+  try:
+    - lobby
+  # Disabling it allows our global-chat plugin to cancel messages.
+  forceKeyAuthentication: false
+  requireBuiltinCommandPermissions: true
+  forwarding:
+    mode: velocity
