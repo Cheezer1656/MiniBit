@@ -1,8 +1,8 @@
 # Build gate
-FROM golang:1.25-trixie as gate_builder
+FROM golang:1.25-trixie AS gate_builder
 WORKDIR /build
 COPY ./gate .
-RUN GOOS=linux GOARCH=arm64 go build -ldfalgs="-s -w"
+RUN GOOS=linux GOARCH=arm64 go build -ldflags="-s -w"
 RUN mkdir -p /tmp/dist && cp gate /tmp/dist
 
 # Install cargo-chef
@@ -47,7 +47,7 @@ COPY --from=gate_builder /tmp/dist/gate bin/
 COPY --from=builder2 /tmp/dist bin/
 COPY --from=builder1 /tmp/dist/secretgen /tmp/secretgen
 RUN /tmp/secretgen > ./proxy/forwarding.secret
-RUN chmod +x ./configure.sh
+RUN chmod +x ./configure.sh ./start.sh
 
 EXPOSE 25565
 CMD "./start.sh"
