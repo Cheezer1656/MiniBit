@@ -11,8 +11,11 @@ for file in **/server.json; do
     result+="    $name: localhost:$port\n"
     (
         cd "./$name"
-        sed -i "" "s/25565/$port/g" server.json
-        sed -i "" 's#"connection_mode": 1#"connection_mode": 3#g' server.json
+`        config=$(<server.json)
+        config=${config//25565/$port}
+        config=${config//\"connection_mode\": 1/\"connection_mode\": 3}
+
+        echo "$config" > server.json`
     )
 done
 
