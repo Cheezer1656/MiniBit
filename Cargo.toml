@@ -4,9 +4,10 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+automod = "1.0.15"
 bigdecimal = "0.4.7"
 chrono = "0.4.40"
-clap = { version = "4.5.54", features = ["derive"] }
+clap = { version = "4.5.54", features = ["cargo"] }
 diesel = { version = "2.2.7", features = ["chrono", "numeric", "postgres", "serde_json"] }
 fastrand = "2.1.0"
 parry3d = "0.17.0"

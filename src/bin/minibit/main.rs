@@ -16,78 +16,78 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-mod lobby;
-mod bedwars;
-mod bowfight;
-mod boxing;
-mod bridge;
-mod classic;
-mod parkour;
-mod spaceshooter;
-mod sumo;
-mod trainchase;
+mod subservers {
+    automod::dir!(pub "src/bin/minibit/subservers");
+}
 
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::thread;
 use std::thread::JoinHandle;
-use clap::Parser;
-
-#[derive(Parser, Debug)]
-#[command(version, about, long_about = None)]
-struct Args {
-    #[arg(long, default_value = None)] auto: Option<String>,
-
-    #[arg(long, default_value = None)] lobby: Option<String>,
-    #[arg(long, default_value = None)] bedwars: Option<String>,
-    #[arg(long, default_value = None)] bowfight: Option<String>,
-    #[arg(long, default_value = None)] boxing: Option<String>,
-    #[arg(long, default_value = None)] bridge: Option<String>,
-    #[arg(long, default_value = None)] classic: Option<String>,
-    #[arg(long, default_value = None)] parkour: Option<String>,
-    #[arg(long, default_value = None)] spaceshooter: Option<String>,
-    #[arg(long, default_value = None)] sumo: Option<String>,
-    #[arg(long, default_value = None)] trainchase: Option<String>,
-}
+use clap::{arg, command, value_parser, Arg};
+use crate::subservers::*;
 
 #[macro_export]
-macro_rules! minigames {
-    ( $args:expr, $handles:expr, $( $x:ident ),* ) => {
-        $(
-            if let Some(path) = $args.$x {
-                $handles.push(thread::spawn(|| {
-                    println!("Starting {} at {}", stringify!($x), path.clone());
-                    $x::main(PathBuf::from(path));
-                }));
-            }
-        )*
-    };
-}
-
-#[macro_export]
-macro_rules! auto_minigames {
-    ( $dir:expr, $handles:expr, $( $x:ident ),* ) => {
-        $(
-            let dir = $dir.join(stringify!($x));
-            if dir.exists() {
-                $handles.push(thread::spawn(|| {
-                    println!("Starting {} at {}", stringify!($x), dir.display());
-                    $x::main(dir);
-                }));
-            }
-        )*
+macro_rules! subserver {
+    ($server:ident) => {
+        (stringify!($server), $server::main as fn(PathBuf))
     };
 }
 
 fn main() {
-    let args = Args::parse();
+    let subservers: HashMap<&str, fn(PathBuf)> = HashMap::from([
+        subserver!(lobby),
+        subserver!(bedwars),
+        subserver!(bowfight),
+        subserver!(boxing),
+        subserver!(bridge),
+        subserver!(classic),
+        subserver!(parkour),
+        subserver!(spaceshooter),
+        subserver!(sumo),
+        subserver!(trainchase),
+    ]);
+
+    let mut matches = command!()
+        .arg(arg!(--auto <FOLDER> "Automatically launches servers")
+            .required(false)
+            .value_parser(value_parser!(PathBuf)));
+
+    for subserver in subservers.keys() {
+        matches = matches.arg(Arg::new(subserver)
+            .long(subserver)
+            .required(false)
+            .value_name("FOLDER")
+            .value_parser(value_parser!(PathBuf))
+            .help(format!("Launch {} using configuration at FOLDER", subserver)))
+    }
+
+    let matches = matches.get_matches();
 
     let mut handles: Vec<JoinHandle<()>> = Vec::new();
 
-    if let Some(auto) = args.auto {
+    if let Some(auto) = matches.get_one::<PathBuf>("auto") {
         let dir = Path::new(&auto);
-        auto_minigames!(dir, handles, lobby, bedwars, bowfight, boxing, bridge, classic, parkour, spaceshooter, sumo, trainchase);
+
+        for (game, run) in subservers {
+            let dir = dir.join(game);
+            if dir.exists() {
+                println!("Starting {} at {}", game, dir.display());
+                handles.push(thread::spawn(move || {
+                    run(dir);
+                }));
+            }
+        }
     } else {
-        minigames!(args, handles, lobby, bedwars, bowfight, boxing, bridge, classic, parkour, spaceshooter, sumo, trainchase);
+        for (game, run) in subservers {
+            if let Some(dir) = matches.get_one::<PathBuf>(game) {
+                println!("Starting {} at {}", game, dir.display());
+                let cloned = dir.clone();
+                handles.push(thread::spawn(move || {
+                    run(cloned);
+                }));
+            }
+        }
     }
 
     for handle in handles {
