@@ -11,6 +11,6 @@ A full blown Minecraft minigame server written in Rust using [Valence](https://g
 
 ## Getting Started
 1. Clone the repo
-2. Build the Docker image
-3. Run the Docker image with port 25565 open
-4. You're done! You can join the server now and try out the minigames!
+2. Run `configure_servers.sh` to initialize base configuration and secrets
+3. Run `docker compose up`
+4. You're done! You can join the server now at port 25565 and try out the minigames!
