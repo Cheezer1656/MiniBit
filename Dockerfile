@@ -18,7 +18,6 @@ RUN cargo build --release --target aarch64-unknown-linux-musl
 
 # Build the runtime image
 FROM alpine:3.23 AS runtime
-RUN apk update && apk add build-base dumb-init bash sed
 WORKDIR /run
 RUN mkdir -p /bin
 COPY --from=builder /build/target/aarch64-unknown-linux-musl/release/minibit /bin/minibit
