@@ -1,14 +1,14 @@
 services:
-  gate:
-    build: gate
+  velocity:
+    build: velocity
     ports:
       - "25565:25565"
     volumes:
-      - "./run.tmp/proxy:/run"
+      - "./run.tmp/proxy/velocity.toml:/proxy/velocity.toml"
     env_file: "run.tmp/.env"
   minibit:
     build: .
-    network_mode: service:gate
+    network_mode: service:velocity
     volumes:
       - "./run.tmp:/run"
     command: /bin/minibit --auto /run

@@ -10,7 +10,7 @@ for file in **/server.json; do
     name=$(dirname "$file")
 
     port+=1
-    result+="    $name: localhost:$port\n"
+    result+="$name = \"127.0.0.1:$port\"\n"
     (
         cd "./$name"
 `       config=$(<server.json)
@@ -24,9 +24,9 @@ done
 # Remove the last newline
 result=$(echo -e "$result" | sed '$d')
 
-proxy_config=$(<proxy/config.yml)
-proxy_config=${proxy_config//    lobby: localhost:25565/$result}
-echo "$proxy_config" > proxy/config.yml
+proxy_config=$(<proxy/velocity.toml)
+proxy_config=${proxy_config//lobby = \"127.0.0.1:25566\"/$result}
+echo "$proxy_config" > proxy/velocity.toml
 
 SECRET=$(LC_ALL=C tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 12)
-echo -e "FORWARDING_SECRET=$SECRET\nGATE_VELOCITY_SECRET=$SECRET" > .env
+echo -e "FORWARDING_SECRET=$SECRET\nVELOCITY_FORWARDING_SECRET=$SECRET" > .env
