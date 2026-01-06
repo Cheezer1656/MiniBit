@@ -16,9 +16,7 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-use std::{
-    marker::PhantomData, net::{IpAddr, SocketAddr}, path::PathBuf, str::FromStr, sync::Arc
-};
+use std::{env, marker::PhantomData, net::{IpAddr, SocketAddr}, path::PathBuf, str::FromStr, sync::Arc};
 use ::serde::Deserialize;
 use serde::de::DeserializeOwned;
 use valence::{network::NetworkSettings, prelude::*, CompressionThreshold, ServerSettings};
@@ -29,7 +27,6 @@ pub struct NetworkConfig {
     pub port: u16,
     pub max_players: usize,
     pub connection_mode: u8,
-    pub secret_file: PathBuf,
     pub prevent_proxy_connections: bool,
 }
 
@@ -64,7 +61,7 @@ impl<T: Resource + DeserializeOwned + Sync + Send + 'static> Plugin for ConfigLo
         let netconfig = serde_json::from_str::<NetworkConfig>(&data).unwrap();
 
         let secret = if netconfig.connection_mode == 3 {
-            std::fs::read_to_string(self.path.join(netconfig.secret_file)).expect("Failed to read secret file")
+            env::var("FORWARDING_SECRET").expect("Failed to read secret env var")
         } else {
             String::new()
         };

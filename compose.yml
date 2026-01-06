@@ -1,0 +1,15 @@
+services:
+  gate:
+    build: gate
+    ports:
+      - "25565:25565"
+    volumes:
+      - "./run.tmp/proxy:/run"
+    env_file: "run.tmp/.env"
+  minibit:
+    build: .
+    network_mode: service:gate
+    volumes:
+      - "./run.tmp:/run"
+    command: /bin/minibit --auto /run
+    env_file: "run.tmp/.env"

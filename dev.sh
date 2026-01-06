@@ -1,10 +1,8 @@
 #!/bin/bash
 
-mkdir -p out/bin
-cp -r run/* out/
-
-out/configure.sh
+./configure_servers.sh
 
 (cd gate && go build -ldflags "-s -w")
 
-tmux new-session -d "cargo run -- --auto out" \; split-window "GATE_VELOCITY_SECRET=$(<out/proxy/forwarding.secret) gate/gate -c out/proxy/config.yml" \; attach
+set -a && source run.tmp/.env && set+a
+tmux new-session -d "cargo run -- --auto run.tmp" \; split-window "GATE_VELOCITY_SECRET=$FORWARDING_SECRET gate/gate -c run.tmp/proxy/config.yml" \; attach
