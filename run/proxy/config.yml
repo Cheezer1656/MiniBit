@@ -12,3 +12,5 @@ config:
   requireBuiltinCommandPermissions: true
   forwarding:
     mode: velocity
+  status:
+    motd: §7The §cMini§9Bit §7Network
