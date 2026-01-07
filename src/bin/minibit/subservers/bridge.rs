@@ -210,7 +210,7 @@ fn gamestage_change(
                     for x in -2..=2 {
                         for y in -1..=3 {
                             for z in -2..=2 {
-                                if x < -1 || x > 1 || y < 0 || y > 2 || z < -1 || z > 1 {
+                                if !(-1..=1).contains(&x) || !(0..=2).contains(&y) || !(-1..=1).contains(&z) {
                                     layer.set_block(
                                         spawn_pos + DVec3::new(x as f64, y as f64, z as f64),
                                         BlockState::GLASS,
@@ -308,7 +308,7 @@ fn check_goals(
     mut deaths: EventWriter<DeathEvent>,
 ) {
     for (entity, pos, gamestate) in clients.iter() {
-        if let Some(_) = gamestate.game_id {
+        if gamestate.game_id.is_some() {
             for (i, goal) in config.goals.iter().enumerate() {
                 if goal[0] <= pos.0.x as i32
                     && goal[1] >= pos.0.x as i32
@@ -333,13 +333,14 @@ fn update_bow_cooldown(
 ) {
     for (mut client, mut inv, cursor_item, mut bow_status) in clients.iter_mut() {
         let tick = server.current_tick();
-        if let Some(slot) = inv.first_slot_with_item(ItemKind::Arrow, 2) {
-            if inv.slot(slot).count > 0 || cursor_item.0.item == ItemKind::Arrow {
-                bow_status.cooldown = tick + 60;
-                bow_status.slot = slot;
-                continue;
-            }
+        if let Some(slot) = inv.first_slot_with_item(ItemKind::Arrow, 2)
+            && (inv.slot(slot).count > 0 || cursor_item.0.item == ItemKind::Arrow)
+        {
+            bow_status.cooldown = tick + 60;
+            bow_status.slot = slot;
+            continue;
         }
+
         let tick_diff = bow_status.cooldown - tick;
         if tick_diff % 5 == 0 {
             client.write_packet(&ExperienceBarUpdateS2c {
@@ -371,12 +372,11 @@ fn set_use_tick(
     server: Res<Server>,
 ) {
     for event in events.read() {
-        if let Ok((inv, held_item, mut eat_tick)) = clients.get_mut(event.client) {
-            if event.hand == Hand::Main {
-                if inv.slot(held_item.slot()).item == ItemKind::GoldenApple {
-                    eat_tick.0 = server.current_tick();
-                }
-            }
+        if let Ok((inv, held_item, mut eat_tick)) = clients.get_mut(event.client)
+            && event.hand == Hand::Main
+            && inv.slot(held_item.slot()).item == ItemKind::GoldenApple
+        {
+            eat_tick.0 = server.current_tick();
         }
     }
 }
@@ -419,14 +419,12 @@ fn cancel_gapple(
     mut packets: EventReader<PacketEvent>,
 ) {
     for packet in packets.read() {
-        if let Some(pkt) = packet.decode::<PlayerActionC2s>() {
-            if pkt.action == PlayerAction::ReleaseUseItem {
-                if let Ok((inv, held_item, mut eat_tick)) = clients.get_mut(packet.client) {
-                    if inv.slot(held_item.slot()).item == ItemKind::GoldenApple {
-                        eat_tick.0 = i64::MAX;
-                    }
-                }
-            }
+        if let Some(pkt) = packet.decode::<PlayerActionC2s>()
+            && pkt.action == PlayerAction::ReleaseUseItem
+            && let Ok((inv, held_item, mut eat_tick)) = clients.get_mut(packet.client)
+            && inv.slot(held_item.slot()).item == ItemKind::GoldenApple
+        {
+            eat_tick.0 = i64::MAX;
         }
     }
 }
@@ -526,36 +524,36 @@ fn handle_collision_events(
     mut deaths: EventWriter<DeathEvent>,
 ) {
     for event in collisions.read() {
-        if let Ok((vel, owner)) = arrows.get(event.arrow) {
-            if let Ok([mut attacker, mut victim]) = clients.get_many_mut([owner.0, event.player]) {
-                if attacker.gamestate.team == victim.gamestate.team {
-                    continue;
-                }
-
-                // TODO: Make the damage accurate
-                let dmg = calc_dmg(
-                    0.13 * vel.0.length(),
-                    victim.inv.slot(5).item,
-                    victim.inv.slot(6).item,
-                    victim.inv.slot(7).item,
-                    victim.inv.slot(8).item
-                );
-
-                damage_player(
-                    &mut attacker,
-                    &mut victim,
-                    dmg,
-                    Vec3::from(vel.0).normalize().with_y(0.0) * 0.6 * 20.0, // TODO: Make the knockback accurate
-                    &mut deaths,
-                );
-                attacker.client.play_sound(
-                    Sound::EntityArrowHitPlayer,
-                    SoundCategory::Player,
-                    attacker.pos.0,
-                    1.0,
-                    1.0,
-                );
+        if let Ok((vel, owner)) = arrows.get(event.arrow)
+            && let Ok([mut attacker, mut victim]) = clients.get_many_mut([owner.0, event.player])
+        {
+            if attacker.gamestate.team == victim.gamestate.team {
+                continue;
             }
+
+            // TODO: Make the damage accurate
+            let dmg = calc_dmg(
+                0.13 * vel.0.length(),
+                victim.inv.slot(5).item,
+                victim.inv.slot(6).item,
+                victim.inv.slot(7).item,
+                victim.inv.slot(8).item
+            );
+
+            damage_player(
+                &mut attacker,
+                &mut victim,
+                dmg,
+                vel.0.normalize().with_y(0.0) * 0.6 * 20.0, // TODO: Make the knockback accurate
+                &mut deaths,
+            );
+            attacker.client.play_sound(
+                Sound::EntityArrowHitPlayer,
+                SoundCategory::Player,
+                attacker.pos.0,
+                1.0,
+                1.0,
+            );
         }
     }
 }
@@ -565,10 +563,8 @@ fn handle_oob_clients(
     mut deaths: EventWriter<DeathEvent>,
 ) {
     for (entity, pos, gamestate) in positions.iter() {
-        if pos.0.y < 75.0 {
-            if gamestate.game_id.is_some() {
-                deaths.send(DeathEvent(entity, true));
-            }
+        if pos.0.y < 75.0 && gamestate.game_id.is_some() {
+            deaths.send(DeathEvent(entity, true));
         }
     }
 }
@@ -606,46 +602,44 @@ fn handle_death(
             gamestate,
             mut combatstate,
         )) = clients.get_mut(*entity)
+            && let Some(game_id) = gamestate.game_id
+            && let Ok(map_index) = games.get(game_id)
         {
-            if let Some(game_id) = gamestate.game_id {
-                if let Ok(map_index) = games.get(game_id) {
-                    let spawn = &config.worlds[map_index.0].spawns[gamestate.team as usize];
-                    pos.0 = spawn.pos.into();
-                    look.yaw = spawn.rot[0];
-                    look.pitch = spawn.rot[1];
-                    head_yaw.0 = spawn.rot[0];
-                    health.0 = 20.0;
-                    absorption.0 = 0.0;
-                    for slot in 0..inventory.slot_count() {
-                        inventory.set_slot(slot, ItemStack::EMPTY);
-                    }
-                    fill_inventory(&mut inventory, gamestate.team);
-                    if *show {
-                        broadcasts.send(MessageEvent {
-                            game: game_id,
-                            msg: Text::from(username.0.clone()).color(if gamestate.team == 0 {
-                                Color::BLUE
-                            } else {
-                                Color::RED
-                            }) + if let Some(attacker) = combatstate.last_attacker {
-                                if let Ok(username) = usernames.get(attacker) {
-                                    Text::from(" was killed by ").color(Color::GRAY)
-                                        + Text::from(username.0.clone()).color(if gamestate.team == 0 {
-                                            Color::RED
-                                        } else {
-                                            Color::BLUE
-                                        })
-                                } else {
-                                    Text::from(" has died!").color(Color::GRAY)
-                                }
-                            } else {
-                                Text::from(" has died!").color(Color::GRAY)
-                            },
-                        });
-                    }
-                    combatstate.last_attacker = None;
-                }
+            let spawn = &config.worlds[map_index.0].spawns[gamestate.team as usize];
+            pos.0 = spawn.pos.into();
+            look.yaw = spawn.rot[0];
+            look.pitch = spawn.rot[1];
+            head_yaw.0 = spawn.rot[0];
+            health.0 = 20.0;
+            absorption.0 = 0.0;
+            for slot in 0..inventory.slot_count() {
+                inventory.set_slot(slot, ItemStack::EMPTY);
             }
+            fill_inventory(&mut inventory, gamestate.team);
+            if *show {
+                broadcasts.send(MessageEvent {
+                    game: game_id,
+                    msg: Text::from(username.0.clone()).color(if gamestate.team == 0 {
+                        Color::BLUE
+                    } else {
+                        Color::RED
+                    }) + if let Some(attacker) = combatstate.last_attacker {
+                        if let Ok(username) = usernames.get(attacker) {
+                            Text::from(" was killed by ").color(Color::GRAY)
+                                + Text::from(username.0.clone()).color(if gamestate.team == 0 {
+                                    Color::RED
+                                } else {
+                                    Color::BLUE
+                                })
+                        } else {
+                            Text::from(" has died!").color(Color::GRAY)
+                        }
+                    } else {
+                        Text::from(" has died!").color(Color::GRAY)
+                    },
+                });
+            }
+            combatstate.last_attacker = None;
         }
     }
 }
@@ -662,16 +656,14 @@ fn play_death_sound(
         let Some(attacker) = state.last_attacker else {
             continue;
         };
-        if let Ok((mut client, pos)) = clients.get_mut(attacker) {
-            if *show {
-                client.play_sound(
-                    Sound::EntityArrowHitPlayer,
-                    SoundCategory::Player,
-                    pos.0,
-                    1.0,
-                    1.0,
-                );
-            }
+        if let Ok((mut client, pos)) = clients.get_mut(attacker) && *show {
+            client.play_sound(
+                Sound::EntityArrowHitPlayer,
+                SoundCategory::Player,
+                pos.0,
+                1.0,
+                1.0,
+            );
         }
     }
 }
@@ -705,7 +697,7 @@ fn handle_score(
             deaths.send(DeathEvent(*entity, false));
         }
         broadcasts.send(MessageEvent {
-            game: game,
+            game,
             msg: Text::from(username.0.clone()).color(
                 if team == 0 {
                     Color::BLUE

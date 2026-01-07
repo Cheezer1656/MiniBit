@@ -17,6 +17,7 @@
 */
 
 #![allow(dead_code)]
+#![allow(clippy::type_complexity)]
 
 use bevy_ecs::query::QueryData;
 use parry3d::{math::Vector, na::{self, Isometry3}, query::{cast_shapes, ShapeCastOptions}, shape::Cuboid};
@@ -57,12 +58,11 @@ fn set_use_tick(
     server: Res<Server>,
 ) {
     for event in events.read() {
-        if let Ok((inv, held_item, mut draw_tick)) = clients.get_mut(event.client) {
-            if event.hand == Hand::Main {
-                if inv.slot(held_item.slot()).item == ItemKind::Bow {
-                    draw_tick.0 = server.current_tick();
-                }
-            }
+        if let Ok((inv, held_item, mut draw_tick)) = clients.get_mut(event.client)
+            && event.hand == Hand::Main
+            && inv.slot(held_item.slot()).item == ItemKind::Bow
+        {
+            draw_tick.0 = server.current_tick();
         }
     }
 }
@@ -182,7 +182,7 @@ pub fn apply_arrow_physics(
             let player_iso = Isometry3::new(Vector::new(player_pos.0.x as f32, player_pos.0.y as f32 + 0.9, player_pos.0.z as f32), na::zero());
             let player_vel = Vector::new(player_vel.0.x / 100.0, player_vel.0.y / 100.0, player_vel.0.z / 100.0);
 
-            if let Some(_) = cast_shapes(&arrow_iso, &arrow_vel, &arrow_shape, &player_iso, &player_vel, &player_shape, ShapeCastOptions::with_max_time_of_impact(1.0)).unwrap() {
+            if cast_shapes(&arrow_iso, &arrow_vel, &arrow_shape, &player_iso, &player_vel, &player_shape, ShapeCastOptions::with_max_time_of_impact(1.0)).unwrap().is_some() {
                 commands.entity(entity).insert(Despawned);
                 collisions.send(ProjectileCollisionEvent {
                     arrow: entity,

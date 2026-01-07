@@ -75,28 +75,28 @@ fn handle_digging_events(
                     inv.set_slot(slot, ItemStack::new(item_kind, 1, None));
                 }
                 // If it is a bed, break the other half
-                if let Some(part) = block.state.get(PropName::Part) {
-                    if let Some(dir) = block.state.get(PropName::Facing) {
-                        let dir = match part {
-                            PropValue::Head => match dir {
-                                PropValue::North => Direction::South,
-                                PropValue::East => Direction::West,
-                                PropValue::South => Direction::North,
-                                PropValue::West => Direction::East,
-                                _ => continue,
-                            }
-                            PropValue::Foot => match dir {
-                                PropValue::North => Direction::North,
-                                PropValue::East => Direction::East,
-                                PropValue::South => Direction::South,
-                                PropValue::West => Direction::West,
-                                _ => continue,
-                            }
+                if let Some(part) = block.state.get(PropName::Part)
+                    && let Some(dir) = block.state.get(PropName::Facing)
+                {
+                    let dir = match part {
+                        PropValue::Head => match dir {
+                            PropValue::North => Direction::South,
+                            PropValue::East => Direction::West,
+                            PropValue::South => Direction::North,
+                            PropValue::West => Direction::East,
                             _ => continue,
-                        };
-                        let other_pos = event.position.get_in_direction(dir);
-                        chunk_layer.set_block(other_pos, BlockState::AIR);
-                    }
+                        }
+                        PropValue::Foot => match dir {
+                            PropValue::North => Direction::North,
+                            PropValue::East => Direction::East,
+                            PropValue::South => Direction::South,
+                            PropValue::West => Direction::West,
+                            _ => continue,
+                        }
+                        _ => continue,
+                    };
+                    let other_pos = event.position.get_in_direction(dir);
+                    chunk_layer.set_block(other_pos, BlockState::AIR);
                 }
                 chunk_layer.set_block(event.position, BlockState::AIR);
                 break_events.send(BlockBreakEvent {

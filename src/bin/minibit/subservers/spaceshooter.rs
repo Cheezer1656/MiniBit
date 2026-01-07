@@ -16,6 +16,7 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
+#![allow(clippy::type_complexity)]
 
 use std::marker::PhantomData;
 use std::path::PathBuf;
@@ -138,36 +139,36 @@ fn shoot(
     mut commands: Commands
 ) {
     for pkt in packets.read() {
-        if let Some(_) = pkt.decode::<HandSwingC2s>() {
-            if let Ok((mut client, player_pos, look, mut state)) = clients.get_mut(pkt.client) {
-                let yaw = look.yaw.to_radians() as f64;
-                let pitch = look.pitch.to_radians() as f64;
-                let direction = DVec3::new(
-                    -yaw.sin() * pitch.cos(),
-                    -pitch.sin(),
-                    yaw.cos() * pitch.cos(),
-                ) * 0.99;
+        if pkt.decode::<HandSwingC2s>().is_some()
+            && let Ok((mut client, player_pos, look, mut state)) = clients.get_mut(pkt.client)
+        {
+            let yaw = look.yaw.to_radians() as f64;
+            let pitch = look.pitch.to_radians() as f64;
+            let direction = DVec3::new(
+                -yaw.sin() * pitch.cos(),
+                -pitch.sin(),
+                yaw.cos() * pitch.cos(),
+            ) * 0.99;
 
-                let mut pos = player_pos.0 + DVec3::new(0.0, 1.6, 0.0);
-                for _ in 0..100 {
-                    pos += direction;
-                    client.play_particle(&Particle::Dust { rgb: Vec3::new(255.0, 0.0, 0.0), scale: 1.0 }, true, pos, Vec3::splat(0.001), 0.01, 2);
-                    let mut hit_blocks: Vec<usize> = Vec::new();
-                    for (i, entity) in state.blocks.iter().enumerate() {
-                        if let Ok((entity, block_pos, block_layer)) = falling_blocks.get(*entity) {
-                            if block_layer.0 == pkt.client && (block_pos.0 - pos).length() < 1.0 {
-                                client.play_sound(Sound::EntityArrowHitPlayer, SoundCategory::Master, player_pos.0, 1.0, 1.0);
-                                commands.entity(entity).insert(Despawned);
-                                hit_blocks.push(i);
-                                state.score += 1;
-                                client.set_action_bar(&format!("Score: {}", state.score).color(Color::GREEN).bold());
-                                break;
-                            }
-                        }
+            let mut pos = player_pos.0 + DVec3::new(0.0, 1.6, 0.0);
+            for _ in 0..100 {
+                pos += direction;
+                client.play_particle(&Particle::Dust { rgb: Vec3::new(255.0, 0.0, 0.0), scale: 1.0 }, true, pos, Vec3::splat(0.001), 0.01, 2);
+                let mut hit_blocks: Vec<usize> = Vec::new();
+                for (i, entity) in state.blocks.iter().enumerate() {
+                    if let Ok((entity, block_pos, block_layer)) = falling_blocks.get(*entity)
+                        && block_layer.0 == pkt.client && (block_pos.0 - pos).length() < 1.0
+                    {
+                        client.play_sound(Sound::EntityArrowHitPlayer, SoundCategory::Master, player_pos.0, 1.0, 1.0);
+                        commands.entity(entity).insert(Despawned);
+                        hit_blocks.push(i);
+                        state.score += 1;
+                        client.set_action_bar(format!("Score: {}", state.score).color(Color::GREEN).bold());
+                        break;
                     }
-                    for i in hit_blocks.iter() {
-                        state.blocks.remove(*i);
-                    }
+                }
+                for i in hit_blocks.iter() {
+                    state.blocks.remove(*i);
                 }
             }
         }

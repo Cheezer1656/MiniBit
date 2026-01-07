@@ -184,23 +184,23 @@ fn handle_collision_events(
     mut end_game: EventWriter<EndGameEvent>,
 ) {
     for event in collisions.read() {
-        if let Ok((vel, owner)) = arrows.get(event.arrow) {
-            if let Ok([mut attacker, mut victim]) = clients.get_many_mut([owner.0, event.player]) {
-                damage_player(
-                    &mut attacker,
-                    &mut victim,
-                    0.13 * vel.0.length(),
-                    Vec3::new(0.0, 0.0, 0.0),
-                    &mut end_game,
-                );
-                attacker.client.play_sound(
-                    Sound::EntityArrowHitPlayer,
-                    SoundCategory::Player,
-                    attacker.pos.0,
-                    1.0,
-                    1.0,
-                );
-            }
+        if let Ok((vel, owner)) = arrows.get(event.arrow)
+            && let Ok([mut attacker, mut victim]) = clients.get_many_mut([owner.0, event.player])
+        {
+            damage_player(
+                &mut attacker,
+                &mut victim,
+                0.13 * vel.0.length(),
+                Vec3::new(0.0, 0.0, 0.0),
+                &mut end_game,
+            );
+            attacker.client.play_sound(
+                Sound::EntityArrowHitPlayer,
+                SoundCategory::Player,
+                attacker.pos.0,
+                1.0,
+                1.0,
+            );
         }
     }
 }
@@ -210,13 +210,11 @@ fn handle_oob_clients(
     mut end_game: EventWriter<EndGameEvent>,
 ) {
     for (pos, gamestate) in positions.iter() {
-        if pos.0.y < 0.0 {
-            if gamestate.game_id.is_some() {
-                end_game.send(EndGameEvent {
-                    game_id: gamestate.game_id.unwrap(),
-                    loser: gamestate.team,
-                });
-            }
+        if pos.0.y < 0.0 && let Some(game_id) = gamestate.game_id {
+            end_game.send(EndGameEvent {
+                game_id,
+                loser: gamestate.team,
+            });
         }
     }
 }

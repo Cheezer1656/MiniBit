@@ -16,6 +16,8 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
+#![allow(clippy::type_complexity)]
+
 use valence::prelude::*;
 use valence_anvil::AnvilLevel;
 use crate::config::DataPath;

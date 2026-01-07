@@ -49,12 +49,11 @@ fn broadcast_stop_item(
     mut packets: EventReader<PacketEvent>,
 ) {
     for packet in packets.read() {
-        if let Some(pkt) = packet.decode::<PlayerActionC2s>() {
-            if pkt.action == PlayerAction::ReleaseUseItem {
-                if let Ok(mut flags) = clients.get_mut(packet.client) {
-                    flags.set_using_item(false);
-                }
-            }
+        if let Some(pkt) = packet.decode::<PlayerActionC2s>()
+            && pkt.action == PlayerAction::ReleaseUseItem
+            && let Ok(mut flags) = clients.get_mut(packet.client)
+        {
+            flags.set_using_item(false);
         }
     }
 }
