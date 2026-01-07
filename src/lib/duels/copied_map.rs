@@ -19,10 +19,10 @@
 #![allow(clippy::type_complexity)]
 #![allow(clippy::too_many_arguments)]
 
+use super::*;
+use crate::config::DataPath;
 use valence::prelude::*;
 use valence_anvil::AnvilLevel;
-use crate::config::DataPath;
-use super::*;
 
 #[derive(Bundle)]
 pub struct Game {
@@ -45,11 +45,8 @@ pub struct MapPlugin<T: Resource + DuelsConfig> {
 
 impl<T: Resource + DeserializeOwned + DuelsConfig + Sync + Send + 'static> Plugin for MapPlugin<T> {
     fn build(&self, app: &mut App) {
-        app
-            .add_systems(Startup, setup::<T>)
-            .add_systems(Update, (
-                init_clients::<T>,
-            ))
+        app.add_systems(Startup, setup::<T>)
+            .add_systems(Update, (init_clients::<T>,))
             .add_systems(PostUpdate, (check_queue::<T>, end_game::<T>));
     }
 }
@@ -62,7 +59,15 @@ pub fn setup<T: Resource + DuelsConfig>(
     config: Res<T>,
     data_path: Res<DataPath>,
 ) {
-    let layer_id = commands.spawn(init_world(&config.worlds()[0], &server, &dimensions, &biomes, &data_path)).id();
+    let layer_id = commands
+        .spawn(init_world(
+            &config.worlds()[0],
+            &server,
+            &dimensions,
+            &biomes,
+            &data_path,
+        ))
+        .id();
 
     commands.insert_resource(MapGlobals {
         queue_layer: layer_id,
@@ -200,7 +205,9 @@ fn start_game<T: Resource + DuelsConfig>(
 ) {
     let map_idx = fastrand::usize(1..config.worlds().len());
     let world = &config.worlds()[map_idx];
-    let layer = commands.spawn(init_world(world, server, dimensions, biomes, data_path)).id();
+    let layer = commands
+        .spawn(init_world(world, server, dimensions, biomes, data_path))
+        .id();
 
     let game_id = commands
         .spawn(Game {

@@ -16,10 +16,17 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-use std::{env, marker::PhantomData, net::{IpAddr, SocketAddr}, path::PathBuf, str::FromStr, sync::Arc};
 use ::serde::Deserialize;
 use serde::de::DeserializeOwned;
-use valence::{network::NetworkSettings, prelude::*, CompressionThreshold, ServerSettings};
+use std::{
+    env,
+    marker::PhantomData,
+    net::{IpAddr, SocketAddr},
+    path::PathBuf,
+    str::FromStr,
+    sync::Arc,
+};
+use valence::{CompressionThreshold, ServerSettings, network::NetworkSettings, prelude::*};
 
 #[derive(Deserialize)]
 pub struct NetworkConfig {

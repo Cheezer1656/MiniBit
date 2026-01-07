@@ -75,7 +75,10 @@ fn handle_drop(
             if let Some(slot) = event.from_slot {
                 if inv.slot(slot).item == event.stack.item {
                     let count = inv.slot(slot).count;
-                    inv.set_slot(slot, event.stack.clone().with_count(count + event.stack.count));
+                    inv.set_slot(
+                        slot,
+                        event.stack.clone().with_count(count + event.stack.count),
+                    );
                 } else {
                     inv.set_slot(slot, event.stack.clone());
                 }

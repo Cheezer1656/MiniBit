@@ -20,8 +20,23 @@
 #![allow(clippy::type_complexity)]
 
 use bevy_ecs::query::QueryData;
-use parry3d::{math::Vector, na::{self, Isometry3}, query::{cast_shapes, ShapeCastOptions}, shape::Cuboid};
-use valence::{entity::{arrow::{ArrowEntity, ArrowEntityBundle}, Velocity}, event_loop::PacketEvent, interact_item::InteractItemEvent, inventory::{HeldItem, PlayerAction}, prelude::*, protocol::{packets::play::PlayerActionC2s, sound::SoundCategory, Sound}};
+use parry3d::{
+    math::Vector,
+    na::{self, Isometry3},
+    query::{ShapeCastOptions, cast_shapes},
+    shape::Cuboid,
+};
+use valence::{
+    entity::{
+        Velocity,
+        arrow::{ArrowEntity, ArrowEntityBundle},
+    },
+    event_loop::PacketEvent,
+    interact_item::InteractItemEvent,
+    inventory::{HeldItem, PlayerAction},
+    prelude::*,
+    protocol::{Sound, packets::play::PlayerActionC2s, sound::SoundCategory},
+};
 
 #[derive(Component)]
 struct BowDrawTick(pub i64);
@@ -39,8 +54,7 @@ pub struct ProjectilePlugin;
 
 impl Plugin for ProjectilePlugin {
     fn build(&self, app: &mut App) {
-        app
-            .add_event::<ProjectileCollisionEvent>()
+        app.add_event::<ProjectileCollisionEvent>()
             .add_systems(EventLoopUpdate, (set_use_tick, handle_player_actions))
             .add_systems(Update, (init_clients, apply_arrow_physics, cleanup_arrows));
     }
@@ -127,11 +141,7 @@ fn handle_player_actions(
 
             let tick_diff = server.current_tick() - player.draw_tick.0;
 
-            let vel = Vec3::new(
-                x / mag,
-                y / mag,
-                z / mag,
-            ) * tick_diff.clamp(0, 20) as f32 * 3.0;
+            let vel = Vec3::new(x / mag, y / mag, z / mag) * tick_diff.clamp(0, 20) as f32 * 3.0;
             let dir = vel.normalize().as_dvec3() * 0.5;
             let arrow_id = commands
                 .spawn(ArrowEntityBundle {
@@ -173,16 +183,41 @@ pub fn apply_arrow_physics(
 
         // Check for collisions (Arrow's have a hitbox of 0.5x0.5x0.5 and players have a hitbox of 0.6x1.8x0.6)
         let arrow_shape = Cuboid::new(Vector::new(0.5, 0.5, 0.5));
-        let arrow_iso = Isometry3::new(Vector::new(pos.0.x as f32, pos.0.y as f32, pos.0.z as f32), na::zero());
+        let arrow_iso = Isometry3::new(
+            Vector::new(pos.0.x as f32, pos.0.y as f32, pos.0.z as f32),
+            na::zero(),
+        );
         let arrow_vel = Vector::new(vel.0.x / 100.0, vel.0.y / 100.0, vel.0.z / 100.0);
 
         let player_shape = Cuboid::new(Vector::new(0.6, 0.9, 0.6));
-        
-        for (player_entity, player_pos, player_vel) in players.iter() {
-            let player_iso = Isometry3::new(Vector::new(player_pos.0.x as f32, player_pos.0.y as f32 + 0.9, player_pos.0.z as f32), na::zero());
-            let player_vel = Vector::new(player_vel.0.x / 100.0, player_vel.0.y / 100.0, player_vel.0.z / 100.0);
 
-            if cast_shapes(&arrow_iso, &arrow_vel, &arrow_shape, &player_iso, &player_vel, &player_shape, ShapeCastOptions::with_max_time_of_impact(1.0)).unwrap().is_some() {
+        for (player_entity, player_pos, player_vel) in players.iter() {
+            let player_iso = Isometry3::new(
+                Vector::new(
+                    player_pos.0.x as f32,
+                    player_pos.0.y as f32 + 0.9,
+                    player_pos.0.z as f32,
+                ),
+                na::zero(),
+            );
+            let player_vel = Vector::new(
+                player_vel.0.x / 100.0,
+                player_vel.0.y / 100.0,
+                player_vel.0.z / 100.0,
+            );
+
+            if cast_shapes(
+                &arrow_iso,
+                &arrow_vel,
+                &arrow_shape,
+                &player_iso,
+                &player_vel,
+                &player_shape,
+                ShapeCastOptions::with_max_time_of_impact(1.0),
+            )
+            .unwrap()
+            .is_some()
+            {
                 commands.entity(entity).insert(Despawned);
                 collisions.send(ProjectileCollisionEvent {
                     arrow: entity,
@@ -193,10 +228,7 @@ pub fn apply_arrow_physics(
     }
 }
 
-fn cleanup_arrows(
-    arrows: Query<(Entity, &Position), With<ArrowEntity>>,
-    mut commands: Commands,
-) {
+fn cleanup_arrows(arrows: Query<(Entity, &Position), With<ArrowEntity>>, mut commands: Commands) {
     for (entity, pos) in arrows.iter() {
         if pos.0.y < -50.0 {
             commands.entity(entity).insert(Despawned);
