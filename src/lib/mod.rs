@@ -20,6 +20,7 @@ pub mod color;
 pub mod config;
 pub mod damage;
 pub mod db;
+pub mod death;
 pub mod duels;
 pub mod player;
 pub mod projectiles;
