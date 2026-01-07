@@ -316,8 +316,8 @@ fn entity_interactions(
 ) {
     for event in events.read() {
         match event.interact {
-            valence::prelude::EntityInteraction::Attack => {}
-            valence::prelude::EntityInteraction::Interact(hand) => {
+            EntityInteraction::Attack => {}
+            EntityInteraction::Interact(hand) => {
                 if hand != Hand::Main {
                     continue;
                 }
@@ -369,14 +369,19 @@ fn handle_slot_click(
     config: Res<LobbyConfig>,
 ) {
     for event in click_slot.read() {
-        if let Ok(_open_inv) = clients.get(event.client)
-            && event.window_id != 0 && (event.slot_id as usize) < config.npcs.len()
-        {
-            action_event.send(ActionEvent {
-                entity: event.client,
-                action: config.npcs[event.slot_id as usize].command.clone(),
-                args: config.npcs[event.slot_id as usize].args.clone(),
-            });
+        if let Ok(_open_inv) = clients.get(event.client) && event.window_id != 0 && event.slot_id >= 19 {
+            let offset_slot = event.slot_id as usize - 19;
+            let row = offset_slot / 9;
+            let col = offset_slot % 9;
+            let npc = row * 7 + col;
+
+            if npc < config.npcs.len() {
+                action_event.send(ActionEvent {
+                    entity: event.client,
+                    action: config.npcs[npc].command.clone(),
+                    args: config.npcs[npc].args.clone(),
+                });
+            }
         }
     }
 }
