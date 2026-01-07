@@ -16,6 +16,9 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
+#![allow(clippy::type_complexity)]
+#![allow(clippy::too_many_arguments)]
+
 use valence::prelude::*;
 use valence_anvil::AnvilLevel;
 use crate::config::DataPath;
@@ -73,8 +76,8 @@ fn init_world(
     biomes: &Res<BiomeRegistry>,
     data_path: &Res<DataPath>,
 ) -> (LayerBundle, AnvilLevel) {
-    let layer = LayerBundle::new(ident!("overworld"), &dimensions, &biomes, &server);
-    let mut level = AnvilLevel::new(data_path.0.join(world.path.clone()), &biomes);
+    let layer = LayerBundle::new(ident!("overworld"), dimensions, biomes, server);
+    let mut level = AnvilLevel::new(data_path.0.join(world.path.clone()), biomes);
 
     for z in world.z_chunks[0]..=world.z_chunks[1] {
         for x in world.x_chunks[0]..=world.x_chunks[1] {
@@ -197,7 +200,7 @@ fn start_game<T: Resource + DuelsConfig>(
 ) {
     let map_idx = fastrand::usize(1..config.worlds().len());
     let world = &config.worlds()[map_idx];
-    let layer = commands.spawn(init_world(&world, &server, &dimensions, &biomes, &data_path)).id();
+    let layer = commands.spawn(init_world(world, server, dimensions, biomes, data_path)).id();
 
     let game_id = commands
         .spawn(Game {

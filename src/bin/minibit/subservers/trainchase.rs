@@ -322,9 +322,9 @@ fn reset_clients(
                 puppet_yaw.0 = 0.0;
                 puppet_vel.0 = Vec3::new(0.0, 0.0, PUPPET_SPEED);
                 puppet_pos.set([
-                    f64::from(START_POS.x) + 0.5,
-                    f64::from(START_POS.y) + 1.0,
-                    f64::from(START_POS.z) + 0.5,
+                    START_POS.x + 0.5,
+                    START_POS.y + 1.0,
+                    START_POS.z + 0.5,
                 ]);
 
                 pos.0 = puppet_pos.get() + DVec3::new(0.0, 4.0, -4.0);
@@ -483,91 +483,87 @@ fn manage_blocks(
     mut commands: Commands,
 ) {
     for (puppet_pos, entity_layer, owner) in puppets.iter() {
-        if let Ok(mut layer) = clients.get_mut(owner.0) {
-            match layer.block(BlockPos::new(
+        if let Ok(mut layer) = clients.get_mut(owner.0)
+            && let Some(block) = layer.block(BlockPos::new(
                 puppet_pos.0.x.floor() as i32,
                 START_POS.y as i32,
                 puppet_pos.0.z.floor() as i32 + GEN_DIST,
-            )) {
-                Some(block) => {
-                    if block.state == BlockState::AIR {
-                        for i in 0..WALL_HEIGHT {
+            ))
+            && block.state == BlockState::AIR
+        {
+            for i in 0..WALL_HEIGHT {
+                layer.set_block(
+                    BlockPos::new(
+                        START_POS.x as i32 + 2,
+                        START_POS.y as i32 + i,
+                        puppet_pos.0.z as i32 + GEN_DIST,
+                    ),
+                    BlockState::STONE_BRICKS,
+                );
+            }
+            for i in 0..WALL_HEIGHT {
+                layer.set_block(
+                    BlockPos::new(
+                        START_POS.x as i32 - 2,
+                        START_POS.y as i32 + i,
+                        puppet_pos.0.z as i32 + GEN_DIST,
+                    ),
+                    BlockState::STONE_BRICKS,
+                );
+            }
+            for i in -1..=1 {
+                let block_pos = BlockPos::new(
+                    START_POS.x as i32 + i,
+                    START_POS.y as i32,
+                    puppet_pos.0.z.floor() as i32 + GEN_DIST,
+                );
+                layer.set_block(block_pos, BlockState::DIRT);
+                match fastrand::u8(0..60) {
+                    0..=2 => {
+                        layer.set_block(
+                            block_pos + IVec3::new(0, 1, 0),
+                            BlockState::OAK_SIGN,
+                        );
+                    }
+                    3..=4 => {
+                        layer.set_block(
+                            block_pos + IVec3::new(0, 2, 0),
+                            BlockState::OAK_SIGN,
+                        );
+                    }
+                    5 => {
+                        for i in 0..fastrand::u8(3..=5) {
                             layer.set_block(
-                                BlockPos::new(
-                                    START_POS.x as i32 + 2,
-                                    START_POS.y as i32 + i,
-                                    puppet_pos.0.z as i32 + GEN_DIST,
-                                ),
-                                BlockState::STONE_BRICKS,
+                                block_pos + IVec3::new(0, 1, -(i as i32)),
+                                BlockState::GRAY_CONCRETE,
                             );
-                        }
-                        for i in 0..WALL_HEIGHT {
                             layer.set_block(
-                                BlockPos::new(
-                                    START_POS.x as i32 - 2,
-                                    START_POS.y as i32 + i,
-                                    puppet_pos.0.z as i32 + GEN_DIST,
-                                ),
-                                BlockState::STONE_BRICKS,
+                                block_pos + IVec3::new(0, 2, -(i as i32)),
+                                BlockState::LIGHT_GRAY_CONCRETE,
                             );
-                        }
-                        for i in -1..=1 {
-                            let block_pos = BlockPos::new(
-                                START_POS.x as i32 + i,
-                                START_POS.y as i32,
-                                puppet_pos.0.z.floor() as i32 + GEN_DIST,
-                            );
-                            layer.set_block(block_pos, BlockState::DIRT);
-                            match fastrand::u8(0..60) {
-                                0..=2 => {
-                                    layer.set_block(
-                                        block_pos + IVec3::new(0, 1, 0),
-                                        BlockState::OAK_SIGN,
-                                    );
-                                }
-                                3..=4 => {
-                                    layer.set_block(
-                                        block_pos + IVec3::new(0, 2, 0),
-                                        BlockState::OAK_SIGN,
-                                    );
-                                }
-                                5 => {
-                                    for i in 0..fastrand::u8(3..=5) {
-                                        layer.set_block(
-                                            block_pos + IVec3::new(0, 1, -(i as i32)),
-                                            BlockState::GRAY_CONCRETE,
-                                        );
-                                        layer.set_block(
-                                            block_pos + IVec3::new(0, 2, -(i as i32)),
-                                            BlockState::LIGHT_GRAY_CONCRETE,
-                                        );
-                                    }
-                                }
-                                _ => {
-                                    layer.set_block(
-                                        block_pos + IVec3::new(0, 1, 0),
-                                        BlockState::RAIL,
-                                    );
-                                }
-                            };
-                            if fastrand::u8(0..10) == 0 {
-                                commands.spawn(ItemEntityBundle {
-                                    item_stack: Stack(ItemStack::new(ItemKind::GoldBlock, 1, None)),
-                                    position: Position(DVec3::new(
-                                        block_pos.x as f64,
-                                        block_pos.y as f64 + fastrand::u8(1..=3) as f64,
-                                        block_pos.z as f64,
-                                    )),
-                                    velocity: Velocity(Vec3::ZERO),
-                                    entity_no_gravity: NoGravity(true),
-                                    layer: *entity_layer,
-                                    ..Default::default()
-                                });
-                            }
                         }
                     }
+                    _ => {
+                        layer.set_block(
+                            block_pos + IVec3::new(0, 1, 0),
+                            BlockState::RAIL,
+                        );
+                    }
+                };
+                if fastrand::u8(0..10) == 0 {
+                    commands.spawn(ItemEntityBundle {
+                        item_stack: Stack(ItemStack::new(ItemKind::GoldBlock, 1, None)),
+                        position: Position(DVec3::new(
+                            block_pos.x as f64,
+                            block_pos.y as f64 + fastrand::u8(1..=3) as f64,
+                            block_pos.z as f64,
+                        )),
+                        velocity: Velocity(Vec3::ZERO),
+                        entity_no_gravity: NoGravity(true),
+                        layer: *entity_layer,
+                        ..Default::default()
+                    });
                 }
-                None => {}
             }
         }
     }
@@ -586,13 +582,12 @@ fn handle_interactions(
     mut packets: EventReader<PacketEvent>,
 ) {
     for packet in packets.read() {
-        if let Some(_) = packet.decode::<HandSwingC2s>() {
-            if let Ok(state) = clients.get(packet.client) {
-                if let Ok((mut ducking, mut pose)) = puppets.get_mut(state.puppet) {
-                    pose.0 = Pose::Swimming;
-                    ducking.time = Some(Instant::now());
-                }
-            }
+        if packet.decode::<HandSwingC2s>().is_some()
+            && let Ok(state) = clients.get(packet.client)
+            && let Ok((mut ducking, mut pose)) = puppets.get_mut(state.puppet)
+        {
+            pose.0 = Pose::Swimming;
+            ducking.time = Some(Instant::now());
         }
     }
 }
@@ -627,12 +622,12 @@ fn handle_movement(
 
             let mut vel = Vec3::ZERO;
 
-            vel.y = if pos.0.y - START_POS.y < 4.1 || pos.0.y - START_POS.y > 4.1 {
+            vel.y = if pos.0.y - START_POS.y != 4.1 {
                 (START_POS.y + 4.0 - pos.0.y) as f32
             } else {
                 0.0
             };
-            vel.z = if puppet_pos.0.z - pos.0.z < 4.1 || puppet_pos.0.z - pos.0.z > 4.1 {
+            vel.z = if puppet_pos.0.z - pos.0.z != 4.1 {
                 (puppet_pos.0.z - 4.0 - pos.0.z) as f32 * PUPPET_SPEED * 100.0
             } else {
                 PUPPET_SPEED * 20.0
@@ -668,11 +663,7 @@ fn apply_physics(
             if vel.0.x != 0.0 {
                 vel.0.x -= vel.0.x * 0.1;
             }
-            if puppet_pos.x > 1.5 {
-                puppet_pos.0.x = 1.5;
-            } else if puppet_pos.x < -0.5 {
-                puppet_pos.0.x = -0.5;
-            }
+            puppet_pos.0.x = puppet_pos.x.clamp(-0.5, 1.5);
             puppet_pos.0 += DVec3::from(vel.0);
         }
     }
@@ -706,11 +697,9 @@ fn check_for_coins(
 
 fn stop_ducking(mut puppets: Query<(&mut DuckingState, &mut entity::Pose), With<IsPuppet>>) {
     for (mut ducking, mut pose) in puppets.iter_mut() {
-        if let Some(time) = ducking.time {
-            if time.elapsed() > Duration::from_millis(750) {
-                pose.0 = Pose::Standing;
-                ducking.time = None;
-            }
+        if let Some(time) = ducking.time && time.elapsed() > Duration::from_millis(750) {
+            pose.0 = Pose::Standing;
+            ducking.time = None;
         }
     }
 }

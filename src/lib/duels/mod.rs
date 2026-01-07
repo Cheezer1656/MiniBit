@@ -23,7 +23,7 @@ pub mod copied_map;
 
 use bevy_ecs::query::QueryData;
 use serde::{de::DeserializeOwned, Deserialize};
-use std::{collections::HashMap, i64, marker::PhantomData, time::SystemTime};
+use std::{collections::HashMap, marker::PhantomData, time::SystemTime};
 use std::path::PathBuf;
 use valence::{
     entity::living::Health,

@@ -343,20 +343,20 @@ fn item_interactions(
     globals: Res<ServerGlobals>,
 ) {
     for packet in packets.read() {
-        if let Some(_pkt) = packet.decode::<PlayerInteractItemC2s>() {
-            if let Ok((entity, mut inv, item)) = clients.get_mut(packet.client) {
-                match inv.slot(item.slot()).item {
-                    ItemKind::Compass => {
-                        commands
-                            .entity(entity)
-                            .insert(OpenInventory::new(globals.navigator_gui.unwrap()));
-                    }
-                    ItemKind::Barrier => {
-                        commands.entity(entity).remove::<ParkourStatus>();
-                        inv.set_slot(item.slot(), ItemStack::EMPTY);
-                    }
-                    _ => {}
+        if let Some(_pkt) = packet.decode::<PlayerInteractItemC2s>()
+            && let Ok((entity, mut inv, item)) = clients.get_mut(packet.client)
+        {
+            match inv.slot(item.slot()).item {
+                ItemKind::Compass => {
+                    commands
+                        .entity(entity)
+                        .insert(OpenInventory::new(globals.navigator_gui.unwrap()));
                 }
+                ItemKind::Barrier => {
+                    commands.entity(entity).remove::<ParkourStatus>();
+                    inv.set_slot(item.slot(), ItemStack::EMPTY);
+                }
+                _ => {}
             }
         }
     }
@@ -369,14 +369,14 @@ fn handle_slot_click(
     config: Res<LobbyConfig>,
 ) {
     for event in click_slot.read() {
-        if let Ok(_open_inv) = clients.get(event.client) {
-            if event.window_id != 0 && (event.slot_id as usize) < config.npcs.len() {
-                action_event.send(ActionEvent {
-                    entity: event.client,
-                    action: config.npcs[event.slot_id as usize].command.clone(),
-                    args: config.npcs[event.slot_id as usize].args.clone(),
-                });
-            }
+        if let Ok(_open_inv) = clients.get(event.client)
+            && event.window_id != 0 && (event.slot_id as usize) < config.npcs.len()
+        {
+            action_event.send(ActionEvent {
+                entity: event.client,
+                action: config.npcs[event.slot_id as usize].command.clone(),
+                args: config.npcs[event.slot_id as usize].args.clone(),
+            });
         }
     }
 }

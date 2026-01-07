@@ -245,12 +245,10 @@ fn set_use_tick(
     server: Res<Server>,
 ) {
     for event in events.read() {
-        if let Ok((inv, held_item, mut eat_tick)) = clients.get_mut(event.client) {
-            if event.hand == Hand::Main {
-                if inv.slot(held_item.slot()).item == ItemKind::GoldenApple {
-                    eat_tick.0 = server.current_tick();
-                }
-            }
+        if let Ok((inv, held_item, mut eat_tick)) = clients.get_mut(event.client)
+            && event.hand == Hand::Main && inv.slot(held_item.slot()).item == ItemKind::GoldenApple
+        {
+            eat_tick.0 = server.current_tick();
         }
     }
 }
@@ -293,14 +291,12 @@ fn cancel_gapple(
     mut packets: EventReader<PacketEvent>,
 ) {
     for packet in packets.read() {
-        if let Some(pkt) = packet.decode::<PlayerActionC2s>() {
-            if pkt.action == PlayerAction::ReleaseUseItem {
-                if let Ok((inv, held_item, mut eat_tick)) = clients.get_mut(packet.client) {
-                    if inv.slot(held_item.slot()).item == ItemKind::GoldenApple {
-                        eat_tick.0 = i64::MAX;
-                    }
-                }
-            }
+        if let Some(pkt) = packet.decode::<PlayerActionC2s>()
+            && pkt.action == PlayerAction::ReleaseUseItem
+            && let Ok((inv, held_item, mut eat_tick)) = clients.get_mut(packet.client)
+            && inv.slot(held_item.slot()).item == ItemKind::GoldenApple
+        {
+            eat_tick.0 = i64::MAX;
         }
     }
 }
@@ -400,36 +396,36 @@ fn handle_collision_events(
     mut deaths: EventWriter<DeathEvent>,
 ) {
     for event in collisions.read() {
-        if let Ok((vel, owner)) = arrows.get(event.arrow) {
-            if let Ok([mut attacker, mut victim]) = clients.get_many_mut([owner.0, event.player]) {
-                if attacker.gamestate.team == victim.gamestate.team {
-                    continue;
-                }
-
-                // TODO: Make the damage accurate
-                let dmg = calc_dmg(
-                    0.13 * vel.0.length(),
-                    victim.inv.slot(5).item,
-                    victim.inv.slot(6).item,
-                    victim.inv.slot(7).item,
-                    victim.inv.slot(8).item
-                );
-
-                damage_player(
-                    &mut attacker,
-                    &mut victim,
-                    dmg,
-                    Vec3::from(vel.0).normalize().with_y(0.0) * 0.6 * 20.0, // TODO: Make the knockback accurate
-                    &mut deaths,
-                );
-                attacker.client.play_sound(
-                    Sound::EntityArrowHitPlayer,
-                    SoundCategory::Player,
-                    attacker.pos.0,
-                    1.0,
-                    1.0,
-                );
+        if let Ok((vel, owner)) = arrows.get(event.arrow)
+            && let Ok([mut attacker, mut victim]) = clients.get_many_mut([owner.0, event.player])
+        {
+            if attacker.gamestate.team == victim.gamestate.team {
+                continue;
             }
+
+            // TODO: Make the damage accurate
+            let dmg = calc_dmg(
+                0.13 * vel.0.length(),
+                victim.inv.slot(5).item,
+                victim.inv.slot(6).item,
+                victim.inv.slot(7).item,
+                victim.inv.slot(8).item
+            );
+
+            damage_player(
+                &mut attacker,
+                &mut victim,
+                dmg,
+                vel.0.normalize().with_y(0.0) * 0.6 * 20.0, // TODO: Make the knockback accurate
+                &mut deaths,
+            );
+            attacker.client.play_sound(
+                Sound::EntityArrowHitPlayer,
+                SoundCategory::Player,
+                attacker.pos.0,
+                1.0,
+                1.0,
+            );
         }
     }
 }
@@ -439,10 +435,8 @@ fn handle_oob_clients(
     mut deaths: EventWriter<DeathEvent>,
 ) {
     for (entity, pos, gamestate) in positions.iter() {
-        if pos.0.y < 0.0 {
-            if gamestate.game_id.is_some() {
-                deaths.send(DeathEvent(entity, true));
-            }
+        if pos.0.y < 0.0 && gamestate.game_id.is_some() {
+            deaths.send(DeathEvent(entity, true));
         }
     }
 }
@@ -484,53 +478,51 @@ fn handle_death(
             bedwars_state,
             mut combatstate,
         )) = clients.get_mut(*entity)
+            && let Some(game_id) = gamestate.game_id
+            && let Ok(map_index) = games.get(game_id)
         {
-            if let Some(game_id) = gamestate.game_id {
-                if let Ok(map_index) = games.get(game_id) {
-                    if bedwars_state.bed_broken {
-                        *gamemode = GameMode::Spectator;
-                        pos.0 += DVec3::new(0.0, 10.0, 0.0);
-                    } else {
-                        let spawn = &config.worlds[map_index.0].spawns[gamestate.team as usize];
-                        pos.0 = spawn.pos.into();
-                        look.yaw = spawn.rot[0];
-                        look.pitch = spawn.rot[1];
-                        head_yaw.0 = spawn.rot[0];
-                    }
-                    health.0 = 20.0;
-                    absorption.0 = 0.0;
-                    for slot in 0..inventory.slot_count() {
-                        inventory.set_slot(slot, ItemStack::EMPTY);
-                    }
-                    fill_inventory(&mut inventory, gamestate.team);
-                    if *show {
-                        broadcasts.send(MessageEvent {
-                            game: game_id,
-                            msg: Text::from(username.0.clone()).color(if gamestate.team == 0 {
-                                Color::BLUE
-                            } else {
-                                Color::RED
-                            }) + if let Some(attacker) = combatstate.last_attacker {
-                                if let Ok(username) = usernames.get(attacker) {
-                                    Text::from(" was killed by ").color(Color::GRAY)
-                                        + Text::from(username.0.clone()).color(if gamestate.team == 0 {
-                                            Color::RED
-                                        } else {
-                                            Color::BLUE
-                                        })
-                                } else {
-                                    Text::from(" has died!").color(Color::GRAY)
-                                }
-                            } else {
-                                Text::from(" has died!").color(Color::GRAY)
-                            } + Text::from(if bedwars_state.bed_broken {
-                                " [FINAL]"
-                            } else { "" }).color(Color::DARK_RED),
-                        });
-                    }
-                    combatstate.last_attacker = None;
-                }
+            if bedwars_state.bed_broken {
+                *gamemode = GameMode::Spectator;
+                pos.0 += DVec3::new(0.0, 10.0, 0.0);
+            } else {
+                let spawn = &config.worlds[map_index.0].spawns[gamestate.team as usize];
+                pos.0 = spawn.pos.into();
+                look.yaw = spawn.rot[0];
+                look.pitch = spawn.rot[1];
+                head_yaw.0 = spawn.rot[0];
             }
+            health.0 = 20.0;
+            absorption.0 = 0.0;
+            for slot in 0..inventory.slot_count() {
+                inventory.set_slot(slot, ItemStack::EMPTY);
+            }
+            fill_inventory(&mut inventory, gamestate.team);
+            if *show {
+                broadcasts.send(MessageEvent {
+                    game: game_id,
+                    msg: Text::from(username.0.clone()).color(if gamestate.team == 0 {
+                        Color::BLUE
+                    } else {
+                        Color::RED
+                    }) + if let Some(attacker) = combatstate.last_attacker {
+                        if let Ok(username) = usernames.get(attacker) {
+                            Text::from(" was killed by ").color(Color::GRAY)
+                                + Text::from(username.0.clone()).color(if gamestate.team == 0 {
+                                    Color::RED
+                                } else {
+                                    Color::BLUE
+                                })
+                        } else {
+                            Text::from(" has died!").color(Color::GRAY)
+                        }
+                    } else {
+                        Text::from(" has died!").color(Color::GRAY)
+                    } + Text::from(if bedwars_state.bed_broken {
+                        " [FINAL]"
+                    } else { "" }).color(Color::DARK_RED),
+                });
+            }
+            combatstate.last_attacker = None;
         }
     }
 }
@@ -544,10 +536,10 @@ fn check_for_winners(
     for (game_id, entities) in games {
         let mut teams_alive = HashSet::new();
         for entity in entities.0.iter() {
-            if let Ok((gamemode, gamestate)) = clients.get(*entity) {
-                if *gamemode != GameMode::Spectator {
-                    teams_alive.insert(gamestate.team);
-                }
+            if let Ok((gamemode, gamestate)) = clients.get(*entity)
+                && *gamemode != GameMode::Spectator
+            {
+                teams_alive.insert(gamestate.team);
             }
         }
         if teams_alive.len() == 1 {
@@ -555,7 +547,7 @@ fn check_for_winners(
                 game_id,
                 loser: if teams_alive.contains(&0) { 1 } else { 0 },
             });
-        } else if teams_alive.len() < 1 {
+        } else if teams_alive.is_empty() {
             end_game.send(EndGameEvent {
                 game_id,
                 loser: 2,
@@ -576,16 +568,14 @@ fn play_death_sound(
         let Some(attacker) = state.last_attacker else {
             continue;
         };
-        if let Ok((mut client, pos)) = clients.get_mut(attacker) {
-            if *show {
-                client.play_sound(
-                    Sound::EntityArrowHitPlayer,
-                    SoundCategory::Player,
-                    pos.0,
-                    1.0,
-                    1.0,
-                );
-            }
+        if let Ok((mut client, pos)) = clients.get_mut(attacker) && *show {
+            client.play_sound(
+                Sound::EntityArrowHitPlayer,
+                SoundCategory::Player,
+                pos.0,
+                1.0,
+                1.0,
+            );
         }
     }
 }
@@ -612,10 +602,10 @@ fn handle_bed_break(
                     continue;
                 };
                 for entity in entities.0.iter() {
-                    if let Ok((mut bedwars_state, gamestate2)) = players.get_mut(*entity) {
-                        if gamestate2.team == team {
-                            bedwars_state.bed_broken = true;
-                        }
+                    if let Ok((mut bedwars_state, gamestate2)) = players.get_mut(*entity)
+                        && gamestate2.team == team
+                    {
+                        bedwars_state.bed_broken = true;
                     }
                 }
                 client.send_chat_message("You destroyed a bed!");

@@ -17,7 +17,6 @@
 */
 
 #[allow(private_interfaces)]
-
 pub mod models;
 pub mod schema;
 
