@@ -20,8 +20,8 @@
 pub mod models;
 pub mod schema;
 
-use std::sync::Mutex;
 use diesel::prelude::*;
+use std::sync::Mutex;
 use valence::prelude::*;
 
 #[derive(Resource)]

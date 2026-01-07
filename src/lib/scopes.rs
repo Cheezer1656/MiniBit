@@ -16,7 +16,10 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-use valence::{command::{scopes::CommandScopes, CommandScopeRegistry}, prelude::*};
+use valence::{
+    command::{CommandScopeRegistry, scopes::CommandScopes},
+    prelude::*,
+};
 
 pub struct ScopePlugin;
 

@@ -20,12 +20,12 @@ mod subservers {
     automod::dir!(pub "src/bin/minibit/subservers");
 }
 
+use crate::subservers::*;
+use clap::{Arg, arg, command, value_parser};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::thread;
 use std::thread::JoinHandle;
-use clap::{arg, command, value_parser, Arg};
-use crate::subservers::*;
 
 #[macro_export]
 macro_rules! subserver {
@@ -48,18 +48,24 @@ fn main() {
         subserver!(trainchase),
     ]);
 
-    let mut matches = command!()
-        .arg(arg!(--auto <FOLDER> "Automatically launches servers")
+    let mut matches = command!().arg(
+        arg!(--auto <FOLDER> "Automatically launches servers")
             .required(false)
-            .value_parser(value_parser!(PathBuf)));
+            .value_parser(value_parser!(PathBuf)),
+    );
 
     for subserver in subservers.keys() {
-        matches = matches.arg(Arg::new(subserver)
-            .long(subserver)
-            .required(false)
-            .value_name("FOLDER")
-            .value_parser(value_parser!(PathBuf))
-            .help(format!("Launch {} using configuration at FOLDER", subserver)))
+        matches = matches.arg(
+            Arg::new(subserver)
+                .long(subserver)
+                .required(false)
+                .value_name("FOLDER")
+                .value_parser(value_parser!(PathBuf))
+                .help(format!(
+                    "Launch {} using configuration at FOLDER",
+                    subserver
+                )),
+        )
     }
 
     let matches = matches.get_matches();

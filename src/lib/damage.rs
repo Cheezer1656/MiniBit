@@ -83,14 +83,33 @@ pub fn armor_toughness(item: ItemKind) -> f32 {
     }
 }
 
-pub fn calc_dmg(dmg: f32, helmet: ItemKind, chestplate: ItemKind, leggings: ItemKind, boots: ItemKind) -> f32 {
-    let armor = armor_points(helmet) + armor_points(chestplate) + armor_points(leggings) + armor_points(boots);
-    let toughness = armor_toughness(helmet) + armor_toughness(chestplate) + armor_toughness(leggings) + armor_toughness(boots);
-    let reduction = 20f32.min((armor/5.0).max(armor-(4.0*dmg)/(toughness.min(20.0)+8.0)))/25.0;
+pub fn calc_dmg(
+    dmg: f32,
+    helmet: ItemKind,
+    chestplate: ItemKind,
+    leggings: ItemKind,
+    boots: ItemKind,
+) -> f32 {
+    let armor = armor_points(helmet)
+        + armor_points(chestplate)
+        + armor_points(leggings)
+        + armor_points(boots);
+    let toughness = armor_toughness(helmet)
+        + armor_toughness(chestplate)
+        + armor_toughness(leggings)
+        + armor_toughness(boots);
+    let reduction =
+        20f32.min((armor / 5.0).max(armor - (4.0 * dmg) / (toughness.min(20.0) + 8.0))) / 25.0;
     dmg * (1.0 - reduction)
 }
 
-pub fn calc_dmg_with_weapon(weapon: ItemKind, helmet: ItemKind, chestplate: ItemKind, leggings: ItemKind, boots: ItemKind) -> f32 {
+pub fn calc_dmg_with_weapon(
+    weapon: ItemKind,
+    helmet: ItemKind,
+    chestplate: ItemKind,
+    leggings: ItemKind,
+    boots: ItemKind,
+) -> f32 {
     let dmg = item_dmg(weapon);
     calc_dmg(dmg, helmet, chestplate, leggings, boots)
 }

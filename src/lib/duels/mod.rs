@@ -18,18 +18,18 @@
 
 #![allow(dead_code)]
 
-pub mod map;
 pub mod copied_map;
+pub mod map;
 
 use bevy_ecs::query::QueryData;
-use serde::{de::DeserializeOwned, Deserialize};
-use std::{collections::HashMap, marker::PhantomData, time::SystemTime};
+use serde::{Deserialize, de::DeserializeOwned};
 use std::path::PathBuf;
+use std::{collections::HashMap, marker::PhantomData, time::SystemTime};
 use valence::{
     entity::living::Health,
     message::ChatMessageEvent,
     prelude::*,
-    protocol::{sound::SoundCategory, Sound},
+    protocol::{Sound, sound::SoundCategory},
 };
 
 use super::config::{ConfigLoaderPlugin, WorldValue};
@@ -116,7 +116,9 @@ pub struct DuelsPlugin<T: DeserializeOwned + DuelsConfig> {
     pub phantom: PhantomData<T>,
 }
 
-impl<T: Resource + DeserializeOwned + DuelsConfig + Sync + Send + 'static> Plugin for DuelsPlugin<T> {
+impl<T: Resource + DeserializeOwned + DuelsConfig + Sync + Send + 'static> Plugin
+    for DuelsPlugin<T>
+{
     fn build(&self, app: &mut App) {
         app.add_plugins(ConfigLoaderPlugin::<T> {
             path: self.path.clone(),
@@ -141,17 +143,15 @@ impl<T: Resource + DeserializeOwned + DuelsConfig + Sync + Send + 'static> Plugi
         .add_systems(PostUpdate, handle_disconnect);
 
         if self.copy_map {
-            app
-                .add_plugins(copied_map::MapPlugin::<T> {
-                    phantom: PhantomData,
-                })
-                .add_systems(Update, gameloop::<T>);
+            app.add_plugins(copied_map::MapPlugin::<T> {
+                phantom: PhantomData,
+            })
+            .add_systems(Update, gameloop::<T>);
         } else {
-            app
-                .add_plugins(map::MapPlugin::<T> {
-                    phantom: PhantomData,
-                })
-                .add_systems(Update, gameloop::<T>);
+            app.add_plugins(map::MapPlugin::<T> {
+                phantom: PhantomData,
+            })
+            .add_systems(Update, gameloop::<T>);
         }
     }
 }

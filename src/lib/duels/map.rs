@@ -18,10 +18,10 @@
 
 #![allow(clippy::type_complexity)]
 
+use super::*;
+use crate::config::DataPath;
 use valence::prelude::*;
 use valence_anvil::AnvilLevel;
-use crate::config::DataPath;
-use super::*;
 
 #[derive(Bundle)]
 pub struct Game {
@@ -44,12 +44,11 @@ pub struct MapPlugin<T: Resource + DuelsConfig> {
 
 impl<T: Resource + DeserializeOwned + DuelsConfig + Sync + Send + 'static> Plugin for MapPlugin<T> {
     fn build(&self, app: &mut App) {
-        app
-            .add_systems(Startup, setup::<T>)
-            .add_systems(Update, (
-                init_clients::<T>,
-                start_game::<T>.after(init_clients::<T>),
-            ))
+        app.add_systems(Startup, setup::<T>)
+            .add_systems(
+                Update,
+                (init_clients::<T>, start_game::<T>.after(init_clients::<T>)),
+            )
             .add_systems(PostUpdate, (check_queue, end_game::<T>));
     }
 }
@@ -79,9 +78,7 @@ pub fn setup<T: Resource + DuelsConfig>(
         layers.push(commands.spawn((layer, level)).id());
     }
 
-    commands.insert_resource(MapGlobals {
-        map_layers: layers,
-    });
+    commands.insert_resource(MapGlobals { map_layers: layers });
 }
 
 pub fn init_clients<T: Resource + DuelsConfig>(

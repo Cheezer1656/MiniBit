@@ -38,12 +38,11 @@ pub struct DiggingPlugin {
 
 impl Plugin for DiggingPlugin {
     fn build(&self, app: &mut App) {
-        app
-            .insert_resource(DiggingPluginResource {
-                whitelist: self.whitelist.clone(),
-            })
-            .add_event::<BlockBreakEvent>()
-            .add_systems(Update, handle_digging_events);
+        app.insert_resource(DiggingPluginResource {
+            whitelist: self.whitelist.clone(),
+        })
+        .add_event::<BlockBreakEvent>()
+        .add_systems(Update, handle_digging_events);
     }
 }
 
@@ -56,7 +55,10 @@ fn handle_digging_events(
 ) {
     for event in events.read() {
         if let Ok((gamemode, mut inv, layer)) = clients.get_mut(event.client) {
-            if *gamemode == GameMode::Adventure || *gamemode == GameMode::Spectator || event.state != DiggingState::Stop {
+            if *gamemode == GameMode::Adventure
+                || *gamemode == GameMode::Spectator
+                || event.state != DiggingState::Stop
+            {
                 continue;
             }
             let Ok(mut chunk_layer) = layers.get_mut(layer.0) else {
@@ -85,14 +87,14 @@ fn handle_digging_events(
                             PropValue::South => Direction::North,
                             PropValue::West => Direction::East,
                             _ => continue,
-                        }
+                        },
                         PropValue::Foot => match dir {
                             PropValue::North => Direction::North,
                             PropValue::East => Direction::East,
                             PropValue::South => Direction::South,
                             PropValue::West => Direction::West,
                             _ => continue,
-                        }
+                        },
                         _ => continue,
                     };
                     let other_pos = event.position.get_in_direction(dir);
@@ -147,17 +149,16 @@ pub struct PlacingPlugin {
 
 impl Plugin for PlacingPlugin {
     fn build(&self, app: &mut App) {
-        app
-            .insert_resource(PlacingPluginResource {
-                max_x: self.max_x,
-                min_x: self.min_x,
-                max_y: self.max_y,
-                min_y: self.min_y,
-                max_z: self.max_z,
-                min_z: self.min_z,
-            })
-            .add_event::<BlockPlaceEvent>()
-            .add_systems(Update, handle_placing_events);
+        app.insert_resource(PlacingPluginResource {
+            max_x: self.max_x,
+            min_x: self.min_x,
+            max_y: self.max_y,
+            min_y: self.min_y,
+            max_z: self.max_z,
+            min_z: self.min_z,
+        })
+        .add_event::<BlockPlaceEvent>()
+        .add_systems(Update, handle_placing_events);
     }
 }
 
@@ -197,7 +198,13 @@ fn handle_placing_events(
             }
             if let Some(restrictions) = &restrictions {
                 for area in restrictions.areas.iter() {
-                    if block_pos.x >= area.min.x && block_pos.x <= area.max.x && block_pos.y >= area.min.y && block_pos.y <= area.max.y && block_pos.z >= area.min.z && block_pos.z <= area.max.z {
+                    if block_pos.x >= area.min.x
+                        && block_pos.x <= area.max.x
+                        && block_pos.y >= area.min.y
+                        && block_pos.y <= area.max.y
+                        && block_pos.z >= area.min.z
+                        && block_pos.z <= area.max.z
+                    {
                         inv.changed |= u64::MAX;
                         continue 'outer;
                     }
@@ -214,12 +221,17 @@ fn handle_placing_events(
             }
             let kind = inv.slot(slot).item;
             if let Some(block_kind) = BlockKind::from_item_kind(kind) {
-                let diff = pos.0 - DVec3::new(block_pos.x as f64 + 0.5, block_pos.y as f64, block_pos.z as f64 + 0.5);
+                let diff = pos.0
+                    - DVec3::new(
+                        block_pos.x as f64 + 0.5,
+                        block_pos.y as f64,
+                        block_pos.z as f64 + 0.5,
+                    );
                 if diff.x.abs() > 0.8 || diff.z.abs() > 0.8 || diff.y >= 1.0 || diff.y <= -2.0 {
                     let Some(block) = chunk_layer.block(block_pos) else {
                         inv.changed |= u64::MAX;
                         continue;
-                    }; 
+                    };
                     if block.state.is_replaceable() {
                         chunk_layer.set_block(block_pos, block_kind.to_state());
                         let count = inv.slot(slot).count - 1;

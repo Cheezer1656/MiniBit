@@ -16,12 +16,12 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-pub mod config;
-pub mod duels;
-pub mod projectiles;
-pub mod player;
-pub mod world;
 pub mod color;
+pub mod config;
 pub mod damage;
-pub mod scopes;
 pub mod db;
+pub mod duels;
+pub mod player;
+pub mod projectiles;
+pub mod scopes;
+pub mod world;
