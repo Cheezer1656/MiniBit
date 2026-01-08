@@ -29,13 +29,17 @@ use valence::protocol::packets::play::DamageTiltS2c;
 use valence::protocol::sound::SoundCategory;
 use valence::protocol::{Sound, WritePacket};
 use valence::protocol::VarInt;
+use minibit_lib::duels::oob::{OobMode, OobPlugin};
 
 pub fn main(path: PathBuf) {
     App::new()
         .add_plugins(DuelsPlugin::<DefaultDuelsConfig> { path, default_gamemode: GameMode::Adventure, copy_map: false, phantom: PhantomData })
         .add_plugins(DefaultPlugins)
+        .add_plugins(OobPlugin {
+            mode: OobMode::GameEndEvent,
+            bounds_y: 0.0..,
+        })
         .add_systems(EventLoopUpdate, handle_combat_events)
-        .add_systems(Update, handle_oob_clients)
         .run();
 }
 
@@ -127,19 +131,5 @@ fn handle_combat_events(
             entity_id: VarInt(victim.id.get()),
             yaw: 0.0,
         });
-    }
-}
-
-fn handle_oob_clients(
-    positions: Query<(&Position, &PlayerGameState), With<Client>>,
-    mut end_game: EventWriter<EndGameEvent>,
-) {
-    for (pos, gamestate) in positions.iter() {
-        if pos.0.y < 0.0 && let Some(game_id) = gamestate.game_id {
-            end_game.send(EndGameEvent {
-                game_id,
-                loser: gamestate.team,
-            });
-        }
     }
 }

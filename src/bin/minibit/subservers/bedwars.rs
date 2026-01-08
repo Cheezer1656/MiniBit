@@ -38,21 +38,19 @@ use valence::entity::living::Health;
 use valence::entity::Velocity;
 use valence::entity::{EntityId, EntityStatuses};
 use valence::equipment::EquipmentInventorySync;
-use valence::event_loop::PacketEvent;
-use valence::interact_item::InteractItemEvent;
 use valence::inventory::HeldItem;
-use valence::inventory::PlayerAction;
 use valence::math::IVec3;
 use valence::math::Vec3Swizzles;
 use valence::nbt::compound;
 use valence::prelude::*;
 use valence::protocol::packets::play::DamageTiltS2c;
-use valence::protocol::packets::play::PlayerActionC2s;
 use valence::protocol::sound::SoundCategory;
 use valence::protocol::Sound;
 use valence::protocol::VarInt;
 use valence::protocol::WritePacket;
 use minibit_lib::death::{DeathEvent, DeathPlugin, DeathSet};
+use minibit_lib::duels::oob::{OobMode, OobPlugin};
+use minibit_lib::food::golden_apple::GoldenApplePlugin;
 
 #[derive(Event)]
 struct MessageEvent {
@@ -78,9 +76,6 @@ impl DuelsConfig for BedwarsConfig {
     }
 }
 
-#[derive(Component)]
-struct EatingStartTick(pub i64);
-
 pub fn main(path: PathBuf) {
     App::new()
         .add_plugins(DuelsPlugin::<BedwarsConfig> {
@@ -95,6 +90,7 @@ pub fn main(path: PathBuf) {
             DisableDropPlugin,
             ProjectilePlugin,
             DeathPlugin,
+            GoldenApplePlugin,
             DiggingPlugin {
                 whitelist: vec![
                     BlockKind::BlueWool,
@@ -111,6 +107,10 @@ pub fn main(path: PathBuf) {
                 max_z: 60,
                 min_z: -60,
             },
+            OobPlugin {
+                mode: OobMode::DeathEvent,
+                bounds_y: 0.0..,
+            },
         ))
         .add_event::<MessageEvent>()
         .add_systems(Startup, setup)
@@ -122,14 +122,10 @@ pub fn main(path: PathBuf) {
                 start_game,
                 end_game,
                 gen_iron,
-                set_use_tick,
-                eat_gapple,
-                cancel_gapple,
                 handle_collision_events,
                 handle_death.after(DeathSet),
                 check_for_winners,
                 handle_bed_break,
-                handle_oob_clients,
                 game_broadcast,
             ),
         )
@@ -146,7 +142,7 @@ fn setup(mut commands: Commands, server_config: Res<BedwarsConfig>) {
 
 fn init_clients(clients: Query<Entity, Added<Client>>, mut commands: Commands) {
     for entity in clients.iter() {
-        commands.entity(entity).insert((EquipmentInventorySync, EatingStartTick(i64::MAX), BedwarsState::default()));
+        commands.entity(entity).insert((EquipmentInventorySync, BedwarsState::default()));
     }
 }
 
@@ -232,68 +228,6 @@ fn gen_iron(
                 layer: *layer_id,
                 ..Default::default()
             });
-        }
-    }
-}
-
-fn set_use_tick(
-    mut clients: Query<(&Inventory, &HeldItem, &mut EatingStartTick), With<Client>>,
-    mut events: EventReader<InteractItemEvent>,
-    server: Res<Server>,
-) {
-    for event in events.read() {
-        if let Ok((inv, held_item, mut eat_tick)) = clients.get_mut(event.client)
-            && event.hand == Hand::Main && inv.slot(held_item.slot()).item == ItemKind::GoldenApple
-        {
-            eat_tick.0 = server.current_tick();
-        }
-    }
-}
-
-fn eat_gapple(
-    mut clients: Query<
-        (
-            &mut Client,
-            &mut Health,
-            &mut Absorption,
-            &mut Inventory,
-            &HeldItem,
-            &mut EatingStartTick,
-        ),
-        With<Client>,
-    >,
-    server: Res<Server>,
-) {
-    for (mut client, mut health, mut absorption, mut inv, held_item, mut eat_tick) in
-        clients.iter_mut()
-    {
-        let slot = held_item.slot();
-        if inv.slot(slot).item != ItemKind::GoldenApple {
-            eat_tick.0 = i64::MAX;
-            continue;
-        }
-        if server.current_tick() - eat_tick.0 > 32 {
-            eat_tick.0 = i64::MAX;
-            client.trigger_status(EntityStatus::ConsumeItem);
-            health.0 = 20.0;
-            absorption.0 = 4.0;
-            let count = inv.slot(slot).count;
-            inv.set_slot_amount(held_item.slot(), count - 1);
-        }
-    }
-}
-
-fn cancel_gapple(
-    mut clients: Query<(&Inventory, &HeldItem, &mut EatingStartTick), With<Client>>,
-    mut packets: EventReader<PacketEvent>,
-) {
-    for packet in packets.read() {
-        if let Some(pkt) = packet.decode::<PlayerActionC2s>()
-            && pkt.action == PlayerAction::ReleaseUseItem
-            && let Ok((inv, held_item, mut eat_tick)) = clients.get_mut(packet.client)
-            && inv.slot(held_item.slot()).item == ItemKind::GoldenApple
-        {
-            eat_tick.0 = i64::MAX;
         }
     }
 }
@@ -423,17 +357,6 @@ fn handle_collision_events(
                 1.0,
                 1.0,
             );
-        }
-    }
-}
-
-fn handle_oob_clients(
-    positions: Query<(Entity, &Position, &PlayerGameState), With<Client>>,
-    mut deaths: EventWriter<DeathEvent>,
-) {
-    for (entity, pos, gamestate) in positions.iter() {
-        if pos.0.y < 0.0 && gamestate.game_id.is_some() {
-            deaths.send(DeathEvent(entity, true));
         }
     }
 }
