@@ -49,8 +49,8 @@ pub fn main(path: PathBuf) {
             Update,
             (
                 init_clients,
-                gamestage_change.after(minibit_lib::duels::gameloop::<DefaultDuelsConfig>),
-                end_game.after(minibit_lib::duels::map::end_game::<DefaultDuelsConfig>),
+                gamestage_change.after(gameloop::<DefaultDuelsConfig>),
+                end_game.after(map::end_game::<DefaultDuelsConfig>),
                 handle_collision_events,
                 handle_oob_clients,
             ),

@@ -20,6 +20,7 @@
 
 pub mod copied_map;
 pub mod map;
+pub mod oob;
 
 use bevy_ecs::query::QueryData;
 use serde::{Deserialize, de::DeserializeOwned};
