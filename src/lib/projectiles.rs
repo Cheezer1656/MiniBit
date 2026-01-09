@@ -37,9 +37,10 @@ use valence::{
     prelude::*,
     protocol::{Sound, packets::play::PlayerActionC2s, sound::SoundCategory},
 };
+use valence::inventory::player_inventory::PlayerInventory;
 
 #[derive(Component)]
-struct BowDrawTick(pub i64);
+struct BowDrawTick(pub i64, pub Hand);
 
 #[derive(Component)]
 pub struct ProjectileOwner(pub Entity);
@@ -62,7 +63,7 @@ impl Plugin for ProjectilePlugin {
 
 fn init_clients(clients: Query<Entity, Added<Client>>, mut commands: Commands) {
     for entity in clients.iter() {
-        commands.entity(entity).insert(BowDrawTick(i64::MAX));
+        commands.entity(entity).insert(BowDrawTick(i64::MAX, Hand::Main));
     }
 }
 
@@ -73,10 +74,13 @@ fn set_use_tick(
 ) {
     for event in events.read() {
         if let Ok((inv, held_item, mut draw_tick)) = clients.get_mut(event.client)
-            && event.hand == Hand::Main
-            && inv.slot(held_item.slot()).item == ItemKind::Bow
+            && inv.slot(match event.hand {
+                Hand::Main => held_item.slot(),
+                Hand::Off => PlayerInventory::SLOT_OFFHAND,
+            }).item == ItemKind::Bow
         {
             draw_tick.0 = server.current_tick();
+            draw_tick.1 = event.hand;
         }
     }
 }
@@ -105,7 +109,12 @@ fn handle_player_actions(
             let Ok(mut player) = players.get_mut(packet.client) else {
                 continue;
             };
-            if player.inv.slot(player.held_item.slot()).item != ItemKind::Bow {
+            let bow_slot = match player.draw_tick.1 {
+                Hand::Main => player.held_item.slot(),
+                Hand::Off => PlayerInventory::SLOT_OFFHAND,
+            };
+
+            if player.inv.slot(bow_slot).item != ItemKind::Bow {
                 continue;
             }
             let Some(arrow_slot) = player.inv.first_slot_with_item(ItemKind::Arrow, 65) else {
