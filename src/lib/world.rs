@@ -19,6 +19,7 @@
 #![allow(dead_code)]
 
 use valence::{interact_block::InteractBlockEvent, inventory::HeldItem, math::IVec3, prelude::*};
+use valence::inventory::player_inventory::PlayerInventory;
 
 #[derive(Event)]
 pub struct BlockBreakEvent {
@@ -185,7 +186,6 @@ fn handle_placing_events(
             let block_z = block_pos.z as isize;
             if *gamemode == GameMode::Adventure
                 || *gamemode == GameMode::Spectator
-                || event.hand != Hand::Main
                 || block_x > res.max_x
                 || block_x < res.min_x
                 || block_y > res.max_y
@@ -214,7 +214,11 @@ fn handle_placing_events(
                 inv.changed |= u64::MAX;
                 continue;
             };
-            let slot = held_item.slot();
+            let slot = match event.hand {
+                Hand::Main => held_item.slot(),
+                Hand::Off => PlayerInventory::SLOT_OFFHAND,
+            };
+
             if inv.slot(slot).count == 0 {
                 inv.changed |= u64::MAX;
                 continue;
