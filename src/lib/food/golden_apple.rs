@@ -1,3 +1,5 @@
+#![allow(clippy::type_complexity)]
+
 use valence::prelude::*;
 use valence::client::Client;
 use valence::interact_item::InteractItemEvent;
@@ -6,6 +8,7 @@ use valence::{Hand, ItemKind, Server};
 use valence::entity::EntityStatus;
 use valence::entity::living::{Absorption, Health};
 use valence::event_loop::PacketEvent;
+use valence::inventory::player_inventory::PlayerInventory;
 use valence::protocol::packets::play::PlayerActionC2s;
 
 pub struct GoldenApplePlugin;
@@ -22,11 +25,11 @@ impl Plugin for GoldenApplePlugin {
 }
 
 #[derive(Component)]
-struct EatingStartTick(pub i64);
+struct EatingStartTick(pub i64, pub Hand);
 
 fn init_clients(clients: Query<Entity, Added<Client>>, mut commands: Commands) {
     for entity in clients.iter() {
-        commands.entity(entity).insert(EatingStartTick(i64::MAX));
+        commands.entity(entity).insert(EatingStartTick(i64::MAX, Hand::Main));
     }
 }
 
@@ -37,10 +40,13 @@ fn set_use_tick(
 ) {
     for event in events.read() {
         if let Ok((inv, held_item, mut eat_tick)) = clients.get_mut(event.client)
-            && event.hand == Hand::Main
-            && inv.slot(held_item.slot()).item == ItemKind::GoldenApple
+            && inv.slot(match event.hand {
+                Hand::Main => held_item.slot(),
+                Hand::Off => PlayerInventory::SLOT_OFFHAND,
+            }).item == ItemKind::GoldenApple
         {
             eat_tick.0 = server.current_tick();
+            eat_tick.1 = event.hand;
         }
     }
 }
@@ -62,7 +68,11 @@ fn eat_gapple(
     for (mut client, mut health, mut absorption, mut inv, held_item, mut eat_tick) in
         clients.iter_mut()
     {
-        let slot = held_item.slot();
+        let slot = match eat_tick.1 {
+            Hand::Main => held_item.slot(),
+            Hand::Off => PlayerInventory::SLOT_OFFHAND,
+        };
+
         if inv.slot(slot).item != ItemKind::GoldenApple {
             eat_tick.0 = i64::MAX;
             continue;
@@ -73,7 +83,7 @@ fn eat_gapple(
             health.0 = 20.0;
             absorption.0 = 4.0;
             let count = inv.slot(slot).count;
-            inv.set_slot_amount(held_item.slot(), count - 1);
+            inv.set_slot_amount(slot, count - 1);
         }
     }
 }
@@ -86,7 +96,10 @@ fn cancel_gapple(
         if let Some(pkt) = packet.decode::<PlayerActionC2s>()
             && pkt.action == PlayerAction::ReleaseUseItem
             && let Ok((inv, held_item, mut eat_tick)) = clients.get_mut(packet.client)
-            && inv.slot(held_item.slot()).item == ItemKind::GoldenApple
+            && inv.slot(match eat_tick.1 {
+                Hand::Main => held_item.slot(),
+                Hand::Off => PlayerInventory::SLOT_OFFHAND,
+            }).item == ItemKind::GoldenApple
         {
             eat_tick.0 = i64::MAX;
         }
