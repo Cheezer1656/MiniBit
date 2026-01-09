@@ -26,6 +26,7 @@ use parry3d::{
     query::{ShapeCastOptions, cast_shapes},
     shape::Cuboid,
 };
+use valence::inventory::player_inventory::PlayerInventory;
 use valence::{
     entity::{
         Velocity,
@@ -37,7 +38,6 @@ use valence::{
     prelude::*,
     protocol::{Sound, packets::play::PlayerActionC2s, sound::SoundCategory},
 };
-use valence::inventory::player_inventory::PlayerInventory;
 
 #[derive(Component)]
 struct BowDrawTick(pub i64, pub Hand);
@@ -63,7 +63,9 @@ impl Plugin for ProjectilePlugin {
 
 fn init_clients(clients: Query<Entity, Added<Client>>, mut commands: Commands) {
     for entity in clients.iter() {
-        commands.entity(entity).insert(BowDrawTick(i64::MAX, Hand::Main));
+        commands
+            .entity(entity)
+            .insert(BowDrawTick(i64::MAX, Hand::Main));
     }
 }
 
@@ -74,10 +76,13 @@ fn set_use_tick(
 ) {
     for event in events.read() {
         if let Ok((inv, held_item, mut draw_tick)) = clients.get_mut(event.client)
-            && inv.slot(match event.hand {
-                Hand::Main => held_item.slot(),
-                Hand::Off => PlayerInventory::SLOT_OFFHAND,
-            }).item == ItemKind::Bow
+            && inv
+                .slot(match event.hand {
+                    Hand::Main => held_item.slot(),
+                    Hand::Off => PlayerInventory::SLOT_OFFHAND,
+                })
+                .item
+                == ItemKind::Bow
         {
             draw_tick.0 = server.current_tick();
             draw_tick.1 = event.hand;

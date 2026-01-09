@@ -1,7 +1,7 @@
-use std::ops::RangeBounds;
-use valence::prelude::*;
 use crate::death::DeathEvent;
 use crate::duels::{EndGameEvent, PlayerGameState};
+use std::ops::RangeBounds;
+use valence::prelude::*;
 
 pub enum OobMode {
     DeathEvent,
@@ -9,20 +9,23 @@ pub enum OobMode {
 }
 
 #[derive(Resource)]
-struct OobResource<R> where
+struct OobResource<R>
+where
     R: RangeBounds<f64> + Send + Sync + Clone + 'static,
 {
     pub bounds_y: R,
 }
 
-pub struct OobPlugin<R> where
+pub struct OobPlugin<R>
+where
     R: RangeBounds<f64> + Send + Sync + Clone + 'static,
 {
     pub mode: OobMode,
     pub bounds_y: R,
 }
 
-impl <R> Plugin for OobPlugin<R> where
+impl<R> Plugin for OobPlugin<R>
+where
     R: RangeBounds<f64> + Send + Sync + Clone + 'static,
 {
     fn build(&self, app: &mut App) {
@@ -59,7 +62,9 @@ fn handle_oob_clients_end_game<R>(
     R: RangeBounds<f64> + Send + Sync + Clone + 'static,
 {
     for (pos, gamestate) in positions.iter() {
-        if !oob.bounds_y.contains(&pos.y) && let Some(game_id) = gamestate.game_id {
+        if !oob.bounds_y.contains(&pos.y)
+            && let Some(game_id) = gamestate.game_id
+        {
             end_game.send(EndGameEvent {
                 game_id,
                 loser: gamestate.team,

@@ -18,8 +18,8 @@
 
 #![allow(dead_code)]
 
-use valence::{interact_block::InteractBlockEvent, inventory::HeldItem, math::IVec3, prelude::*};
 use valence::inventory::player_inventory::PlayerInventory;
+use valence::{interact_block::InteractBlockEvent, inventory::HeldItem, math::IVec3, prelude::*};
 
 #[derive(Event)]
 pub struct BlockBreakEvent {
