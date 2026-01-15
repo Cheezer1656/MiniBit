@@ -21,7 +21,7 @@
 use std::marker::PhantomData;
 use std::path::PathBuf;
 use bevy_ecs::query::QueryData;
-use minibit_lib::duels::{CombatState, DefaultDuelsConfig, DuelsPlugin, EndGameEvent, PlayerGameState};
+use minibit_lib::duels::{CombatState, DefaultDuelsConfig, DuelsPlugin, PlayerGameState};
 use valence::entity::{EntityId, EntityStatuses};
 use valence::math::Vec3Swizzles;
 use valence::prelude::*;
