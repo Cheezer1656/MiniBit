@@ -1,0 +1,64 @@
+name: Create and publish a Docker image
+
+on:
+  push:
+    branches: ['12-prebuilt-docker']
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAMESPACE: ${{ github.repository_owner }}
+
+jobs:
+  build-and-push-images:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      packages: write
+      attestations: write
+      id-token: write
+
+    strategy:
+      matrix:
+        service:
+          - name: minibit
+            path: .
+          - name: velocity
+            path: velocity
+
+    steps:
+      - name: Lowercase image namespace
+        run: echo "IMAGE_NAMESPACE=${IMAGE_NAMESPACE@L}" >> "${GITHUB_ENV}"
+        shell: bash
+
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Generate short commit SHA
+        run: echo "SHORT_SHA=$(git rev-parse --short $GITHUB_SHA)" >> "$GITHUB_ENV"
+        shell: bash
+
+      - name: Log in to the Container registry
+        uses: docker/login-action@65b78e6e13532edd9afa3aa52ac7964289d1a9c1
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push Docker image
+        id: push
+        uses: docker/build-push-action@f2a1d5e99d037542a71f64918e516c093c6f3fc4
+        with:
+          context: ./${{ matrix.service.path }}
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/${{ matrix.service.name }}:latest
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/${{ matrix.service.name }}:${{ env.SHORT_SHA }}
+
+      - name: Generate artifact attestation
+        uses: actions/attest-build-provenance@v3
+        with:
+          subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/${{ matrix.service.name }}
+          subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: true
+
