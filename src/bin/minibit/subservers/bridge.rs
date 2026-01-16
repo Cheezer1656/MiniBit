@@ -19,7 +19,6 @@
 #![allow(clippy::type_complexity)]
 
 use std::marker::PhantomData;
-use std::path::PathBuf;
 use std::time::SystemTime;
 
 use bevy_ecs::query::QueryData;
@@ -52,6 +51,7 @@ use valence::protocol::WritePacket;
 use minibit_lib::death::{DeathEvent, DeathPlugin, DeathSet};
 use minibit_lib::duels::oob::{OobMode, OobPlugin};
 use minibit_lib::food::golden_apple::GoldenApplePlugin;
+use crate::ServerConfig;
 
 #[derive(Event)]
 struct ScoreEvent (Entity);
@@ -90,10 +90,11 @@ impl DuelsConfig for BridgeConfig {
     }
 }
 
-pub fn main(path: PathBuf) {
+pub fn main(config: ServerConfig) {
     App::new()
         .add_plugins(DuelsPlugin::<BridgeConfig> {
-            path,
+            path: config.path,
+            network_config: config.network,
             default_gamemode: GameMode::Survival,
             copy_map: true,
             phantom: PhantomData,

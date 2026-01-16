@@ -17,9 +17,9 @@
 */
 
 use ::serde::Deserialize;
+use serde::Serialize;
 use serde::de::DeserializeOwned;
 use std::{
-    env,
     marker::PhantomData,
     net::{IpAddr, SocketAddr},
     path::PathBuf,
@@ -28,13 +28,29 @@ use std::{
 };
 use valence::{CompressionThreshold, ServerSettings, network::NetworkSettings, prelude::*};
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize, Clone)]
+#[serde(default)]
 pub struct NetworkConfig {
     pub ip: String,
     pub port: u16,
     pub max_players: usize,
     pub connection_mode: u8,
     pub prevent_proxy_connections: bool,
+    #[serde(skip_deserializing)]
+    pub forwarding_secret: String,
+}
+
+impl Default for NetworkConfig {
+    fn default() -> Self {
+        NetworkConfig {
+            ip: "0.0.0.0".to_string(),
+            port: 25565,
+            max_players: 100,
+            connection_mode: 1,
+            prevent_proxy_connections: false,
+            forwarding_secret: "".to_string(),
+        }
+    }
 }
 
 #[derive(Resource, Deserialize)]
@@ -59,20 +75,12 @@ pub struct DataPath(pub PathBuf);
 
 pub struct ConfigLoaderPlugin<T: DeserializeOwned> {
     pub path: PathBuf,
+    pub network_config: NetworkConfig,
     pub phantom: PhantomData<T>,
 }
 
 impl<T: Resource + DeserializeOwned + Sync + Send + 'static> Plugin for ConfigLoaderPlugin<T> {
     fn build(&self, app: &mut App) {
-        let data = std::fs::read_to_string(self.path.join("server.json")).unwrap();
-        let netconfig = serde_json::from_str::<NetworkConfig>(&data).unwrap();
-
-        let secret = if netconfig.connection_mode == 3 {
-            env::var("FORWARDING_SECRET").expect("Failed to read secret env var")
-        } else {
-            String::new()
-        };
-
         let data = std::fs::read_to_string(self.path.join("config.json")).unwrap();
         let config = serde_json::from_str::<T>(&data).unwrap();
 
@@ -81,16 +89,19 @@ impl<T: Resource + DeserializeOwned + Sync + Send + 'static> Plugin for ConfigLo
             ..Default::default()
         })
         .insert_resource(NetworkSettings {
-            address: SocketAddr::new(IpAddr::from_str(&netconfig.ip).unwrap(), netconfig.port),
-            max_players: netconfig.max_players,
-            connection_mode: match netconfig.connection_mode {
+            address: SocketAddr::new(
+                IpAddr::from_str(&self.network_config.ip).unwrap(),
+                self.network_config.port,
+            ),
+            max_players: self.network_config.max_players,
+            connection_mode: match self.network_config.connection_mode {
                 1 => ConnectionMode::Offline,
                 2 => ConnectionMode::BungeeCord,
                 3 => ConnectionMode::Velocity {
-                    secret: Arc::from(secret),
+                    secret: Arc::from(self.network_config.forwarding_secret.clone()),
                 },
                 _ => ConnectionMode::Online {
-                    prevent_proxy_connections: netconfig.prevent_proxy_connections,
+                    prevent_proxy_connections: self.network_config.prevent_proxy_connections,
                 },
             },
             ..Default::default()

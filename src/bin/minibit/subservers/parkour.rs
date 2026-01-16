@@ -20,13 +20,13 @@
 
 use std::collections::VecDeque;
 use std::marker::PhantomData;
-use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use minibit_lib::config::{ConfigLoaderPlugin, EmptyConfig};
 use valence::prelude::*;
 use valence::protocol::sound::{Sound, SoundCategory};
 use valence::spawn::IsFlat;
+use crate::ServerConfig;
 
 const START_POS: BlockPos = BlockPos::new(0, 100, 0);
 const VIEW_DIST: u8 = 10;
@@ -41,9 +41,13 @@ const BLOCK_TYPES: [BlockState; 7] = [
     BlockState::MOSS_BLOCK,
 ];
 
-pub fn main(path: PathBuf) {
+pub fn main(config: ServerConfig) {
     App::new()
-        .add_plugins(ConfigLoaderPlugin::<EmptyConfig> { path, phantom: PhantomData })
+        .add_plugins(ConfigLoaderPlugin::<EmptyConfig> {
+            path: config.path,
+            network_config: config.network,
+            phantom: PhantomData
+        })
         .add_plugins(DefaultPlugins)
         .add_systems(
             Update,

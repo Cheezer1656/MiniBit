@@ -4,12 +4,15 @@ services:
     ports:
       - "25565:25565"
     volumes:
-      - "./run.tmp/proxy/velocity.toml:/proxy/velocity.toml"
-    env_file: "run.tmp/.env"
+      - "./example_configs/velocity/velocity.toml:/proxy/velocity.toml"
+    environment:
+      VELOCITY_FORWARDING_SECRET: a
   minibit:
     build: .
     network_mode: service:velocity
     volumes:
-      - "./run.tmp:/run"
-    command: /bin/minibit --auto /run
-    env_file: "run.tmp/.env"
+      - "./data:/run/data"
+      - "./example_configs/velocity/minibit.yml:/run/config.yml"
+    command: /bin/minibit
+    environment:
+      MINIBIT_FORWARDING_SECRET: a

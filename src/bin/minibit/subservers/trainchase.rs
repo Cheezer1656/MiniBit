@@ -22,7 +22,6 @@ use std::{
     marker::PhantomData,
     time::{Duration, Instant},
 };
-use std::path::PathBuf;
 use minibit_lib::config::{ConfigLoaderPlugin, EmptyConfig};
 use valence::{
     entity::{
@@ -45,6 +44,7 @@ use valence::{
     },
     spawn::IsFlat,
 };
+use crate::ServerConfig;
 
 const START_POS: DVec3 = DVec3::new(0.0, 100.0, 0.0);
 const VIEW_DIST: u8 = 10;
@@ -81,10 +81,11 @@ struct IsCop;
 #[derive(Component)]
 struct Owner(Entity);
 
-pub fn main(path: PathBuf) {
+pub fn main(config: ServerConfig) {
     App::new()
         .add_plugins(ConfigLoaderPlugin::<EmptyConfig> {
-            path,
+            path: config.path,
+            network_config: config.network,
             phantom: PhantomData,
         })
         .add_plugins(DefaultPlugins)

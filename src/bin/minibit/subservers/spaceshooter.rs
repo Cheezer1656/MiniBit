@@ -19,13 +19,13 @@
 #![allow(clippy::type_complexity)]
 
 use std::marker::PhantomData;
-use std::path::PathBuf;
 use minibit_lib::config::{ConfigLoaderPlugin, EmptyConfig};
 use valence::{
     entity::{
         entity::NoGravity, falling_block::{FallingBlockEntity, FallingBlockEntityBundle}, ObjectData, Velocity
     }, event_loop::PacketEvent, prelude::*, protocol::{packets::play::HandSwingC2s, sound::SoundCategory, Sound}, spawn::IsFlat
 };
+use crate::ServerConfig;
 
 const START_POS: DVec3 = DVec3::new(0.0, 100.0, 0.0);
 const VIEW_DIST: u8 = 10;
@@ -36,9 +36,13 @@ struct GameState {
     score: u32,
 }
 
-pub fn main(path: PathBuf) {
+pub fn main(config: ServerConfig) {
     App::new()
-        .add_plugins(ConfigLoaderPlugin::<EmptyConfig> { path, phantom: PhantomData })
+        .add_plugins(ConfigLoaderPlugin::<EmptyConfig> {
+            path: config.path,
+            network_config: config.network,
+            phantom: PhantomData
+        })
         .add_plugins(DefaultPlugins)
         .add_systems(
             Update,
