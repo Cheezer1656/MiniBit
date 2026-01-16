@@ -1,0 +1,92 @@
+{
+    "world": {
+        "path": "../worlds/lobby",
+        "x_chunks": [-3, 3],
+        "z_chunks": [-3, 3],
+        "spawns": [
+            {
+                "pos": [-19.5, 20.0, 61.5],
+                "rot": [180.0, 0.0]
+            }
+        ]
+    },
+    "parkour": [
+        {
+            "name": "Parkour",
+            "start": [-29, 20, 55],
+            "end": [-20, 39, 65]
+        }
+    ],
+    "npcs": [
+        {
+            "name": "Boxing",
+            "pos": [-36.5, 19, 24.5],
+            "yaw": -50.0,
+            "pitch": 0.0,
+            "skin": "ewogICJ0aW1lc3RhbXAiIDogMTcxNDAyNTE2NzU4NSwKICAicHJvZmlsZUlkIiA6ICJjYTU4NzNhYmY0Y2U0YWUxODAxZmVmODgzNjhlMWExNiIsCiAgInByb2ZpbGVOYW1lIiA6ICJEZXRocm9uZXMiLAogICJzaWduYXR1cmVSZXF1aXJlZCIgOiB0cnVlLAogICJ0ZXh0dXJlcyIgOiB7CiAgICAiU0tJTiIgOiB7CiAgICAgICJ1cmwiIDogImh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvNjQ5ZDAxZGNjYjdkNTZjY2Y3ZTc3ZGRiZjU4M2NkNTRiYjJmYWJiNDE5ODMyZDc0ODA5MjQ4MzI3MTJjNDg4IgogICAgfQogIH0KfQ==",
+            "signature": "UyetQx7XyJMPhqeBHCTR5ImqRK2L75Ynf3aJqNJkVuaFnr5zC5lkyzrMh1cRXqtoGyEIs1oX6PHjdqQ14o+rbj2NzNpGYIqaws6ksbYlV4AUmRU3NMyrkH4tjTJnZy3ZucKijrGsq50ngZOChUweAxou+cp3qxg3RQH3Ig5Ib5NLe2WJHc/eR7Gjh0HZxQVRq7Myi5BC8k9ngcq6HksAcfVBGq+hrYRHFV4NRRw2S6cubRoZzLOINj2lpYG4EOcSdQBDUbjcInY6SoYf+sgRDa3VYxMKI5n1S8cfDzND85wa6QK3F4dRMsIs4qLgiEA9W50Jkq1jSbc54+vlXuHXWIJHidLgFAMoph2V7h5mA7Gf6Ahz6e98WDTqb0DWMBD7YaNTpHmexR8TvOPhyGh/ZZ8D26x91qoy0hBdVjD2QkQwWP+D8yqtsIoa/WOL7cX8ahmoWQDdgaQhWfSZiZTZsUBSzXv71WutaPRsyn2k2+mCYtcleW69hSU9s5tTbT1hXrs4PVr82ELrieaydbxErZ0fpI54jWZdAfgtD+OYS4Th6E2Dhg4MrjhiK55gbvP80U+d10lyLBrYNFivynwX/NsHfFEKoSiTlDvYELpbukl0uLtYiIPbaqIq3nXorXn+yz6KANcLx3fNan4iX5CCYGdtt3FHgYOt2MxARmittMA=",
+            "command": "Warp",
+            "args": ["boxing"]
+        },
+        {
+            "name": "Parkour",
+            "pos": [-33.5, 19, 20.5],
+            "yaw": -30.0,
+            "pitch": 0.0,
+            "skin": "ewogICJ0aW1lc3RhbXAiIDogMTYyMTcxNjg3NjUzOCwKICAicHJvZmlsZUlkIiA6ICJkMGI4MjE1OThmMTE0NzI1ODBmNmNiZTliOGUxYmU3MCIsCiAgInByb2ZpbGVOYW1lIiA6ICJqYmFydHl5IiwKICAic2lnbmF0dXJlUmVxdWlyZWQiIDogdHJ1ZSwKICAidGV4dHVyZXMiIDogewogICAgIlNLSU4iIDogewogICAgICAidXJsIiA6ICJodHRwOi8vdGV4dHVyZXMubWluZWNyYWZ0Lm5ldC90ZXh0dXJlL2NhOTNmNmZjNDA0ODhmMTg3N2NkYTk0YTgzMGI1NGU5ZjZmNTRhYjU4YTU0NTNiYWQ1Yzk0NzcyNmRkMWY0NzMiLAogICAgICAibWV0YWRhdGEiIDogewogICAgICAgICJtb2RlbCIgOiAic2xpbSIKICAgICAgfQogICAgfQogIH0KfQ==",
+            "signature": "f6h0Z5TFb6PWiGCUQ0nQdbLQmRUtkYP/R1ZMcVI1FxYUlDk69BQSQKekG5pRjeWFA/5TIiCmd4GMoAE5fmqVhulFJ2J2MsoFO00SNNwGEYJDX1+sxbAhNYMQ52SfHef7eOfTVAb2Ty2Ru6XvrVcvzEXYL1L93H66Cv4QTd+I+UVs8RN0dCrImAej93+iq/ckCf1z7egTY7mEipkjGpHd+RYE7KyEjd4C35jV35m4cCiGFaYqnSzWexKvvNxz1VgIuXesMxl3R3n0AXDe7wLnousGIXnkcuHGc75ZjsiML+HL60sIBn0H02Go1pGYuU/ilv8DOg7LJimFA49Pugkv9KK9YLejF2fi8PqHqYN3G4RdGxwNCLMu+Kj7ZiePTcbI33LnsmNL7Eh6/oE06R0JbvKYWQ78sqPpzMhc0V5ohtCLK7iDP2PjGJ914QEdJwT02XRMKoPrDV0LcYoj6UqRm/SGLF5zAeiFzHxanaIRYgYsT1ELfriyuPXRU6RCRvUnDle3cpqfkxYYvkHXvJvbKx657Y7AxlChpcq+YTIzNMEWMjPbUKuK93TbcXqVoO0gB+St4VQFnQpNnKcJlklKSqDkEpPO1s3pTomUbv3D0ZBcsMkMAt/CZFVevoqaPTjxx63J6vXkt62yiHlMBeFAWI+e7hWmvBuAZnYYXPxB0Uo=",
+            "command": "Warp",
+            "args": ["parkour"]
+        },
+        {
+            "name": "Sumo",
+            "pos": [-27.5, 19.0, 17.5],
+            "yaw": -10.0,
+            "pitch": 0.0,
+            "skin": "ewogICJ0aW1lc3RhbXAiIDogMTcwMTczODY2NzA2NywKICAicHJvZmlsZUlkIiA6ICI5MThhMDI5NTU5ZGQ0Y2U2YjE2ZjdhNWQ1M2VmYjQxMiIsCiAgInByb2ZpbGVOYW1lIiA6ICJCZWV2ZWxvcGVyIiwKICAic2lnbmF0dXJlUmVxdWlyZWQiIDogdHJ1ZSwKICAidGV4dHVyZXMiIDogewogICAgIlNLSU4iIDogewogICAgICAidXJsIiA6ICJodHRwOi8vdGV4dHVyZXMubWluZWNyYWZ0Lm5ldC90ZXh0dXJlLzI1ZmE3ZTA5MTA3MDg4NDY0MTFkZDk0MzM5OTg2OGY4ZWQ2NDE3Nzg3NzBjZDhlNDIwZjkxYTgwNzU3MDFhMWQiCiAgICB9CiAgfQp9",
+            "signature": "q9Tc3/NVX422/gRZJlnLEPW2fQFDP2v1ZedePV1qbToyLKRDA9Pslu0++UzNVZ9D/dRVAtarz7Sk5Pmr6qm3tFrwn9Tr1Z/G5UTBXUOdsRpOqZXdZYERTZ/sWBFxyY1q4ZNISY5wuQ4yeM8dWZYOgYjXhX6wS1JJxdSIUqNbWPqlFiF0Sq9BNHGCb6kDKRwpazQI8AN2vm/L0lez0OGUKxSuoXfPTC2qxPuXXneJ0dzSkHYoh+gKa72EoXom6LeSBNRV8qdtWz+qJOED5oEMGBWiE2ERmMcR3dJE5kFn02PwGUJ0LeEPI5SMnOVQgom2/bz6oqCE4w5JsF482Tv3nBMF7l20BycpEtcjpm1Fo7SNuF3Rzsc/SRXxchjqW6SYS7vZG6vnZaf5U7cb7pdalh49nzQwc90eL676glCTgkS0KI6kCSHXaEtZUJa5M036Cuz2tNDsdz0uAQyFi04EltJqO8o9n3/9OmyhFewwzv6uWULgZplD0RdESuODy24Uw4gjrwaj8d2C82/yxghB4EyLwF0Y6EieVCujqomSOu7lxdp2MwlWr2jPvCLkq5JvMh9bQtN6SU3sbk3m8sJvf3RN7RHDMqMLMOLzEoTSdiEzZH1lulVhlUXciFdy193c6OrGBKwJfveoMwKj6WCg+tECGt4gPE19AIponHIN5x8=",
+            "command": "Warp",
+            "args": ["sumo"]
+        },
+        {
+            "name": "Bridge",
+            "pos": [-19.5, 19, 14.5],
+            "yaw": 0.0,
+            "pitch": 0.0,
+            "skin": "ewogICJ0aW1lc3RhbXAiIDogMTYzNTcwMjcyMDEyNiwKICAicHJvZmlsZUlkIiA6ICJjNmE2N2QwMmY4MGM0MjhmODYyNmQ5MjhlOTNjN2FjNyIsCiAgInByb2ZpbGVOYW1lIiA6ICJHaW92YW5uaVdpamF5YSIsCiAgInNpZ25hdHVyZVJlcXVpcmVkIiA6IHRydWUsCiAgInRleHR1cmVzIiA6IHsKICAgICJTS0lOIiA6IHsKICAgICAgInVybCIgOiAiaHR0cDovL3RleHR1cmVzLm1pbmVjcmFmdC5uZXQvdGV4dHVyZS80YmFmNmU2ZTliOTg1OGYxZjI0NGZhOWFlYWY3OWFlMmJkYjZiOWU5MjBhOTk4ZTg4OWQwNzIzYzEwYWM1MjFkIiwKICAgICAgIm1ldGFkYXRhIiA6IHsKICAgICAgICAibW9kZWwiIDogInNsaW0iCiAgICAgIH0KICAgIH0KICB9Cn0=",
+            "signature": "K8dpzqIVa47SC3gzVI/HOO8xodichhy2EYvnwVisYhqM+siazLQQ9cFzn4dJv1PGLVy9QuaTYyoJAqgySG3OwuK2QFGnhXAcHmLs08Vs2AcxlFoIRtHxatfkcCFFj5O/HpaanCgKUDB5QK/6ulEkFKxBYQIDX6ENz2st4Tag23C8XCsnVRToZbAAWT0vlguH/5cjB7uxmiYMrqx770RG6pv7Y5wqpa7sYWzVsnpCD5dt6v4qu3B1EQ3eVbHmX655qddgiduMArRyxACHTwxPtmB8dwTiEHNQDzqJYTotVz2398ET+j+1tg/LdvC5MZ5xHBKJxKmTKGkoHEoHINseSLsikEw2Z84Ns/y+ol9RNr6tovPrdvroFj265FKv+gjUuvCECDkQTp1oe3Da7RdrVVD/vjihyEq9c1CJ2F8Qfsr/mmc9V+SKOEsEYKqwaH90CeZB4xyP/0muvvm9cAbibauoADLDgzBIMbF17wddVqYmbVVx1Ime1ZxlSPSaNzOSg3KbVJ2igavPApPqW68p3qhrZw4q8ELgO7d44Hma+3LUhGNd3vg2e72o5L3yjSrwvWsWEr9w1fGlvaqf7H8zrM8uncdrCoOqYEvTC1fJ20nbTH4kPT3nXrFSl2etUwFo3XY548DMu0JaxHGPPY/3AxNkceoUweoVbQpMFW8Bdik=",
+            "command": "Warp",
+            "args": ["bridge"]
+        },
+        {
+            "name": "Bowfight",
+            "pos": [-11.5, 19, 17.5],
+            "yaw": 10.0,
+            "pitch": 0.0,
+            "skin": "ewogICJ0aW1lc3RhbXAiIDogMTcxMjk1NTk4NjM2MCwKICAicHJvZmlsZUlkIiA6ICIyNjRkYzBlYjVlZGI0ZmI3OTgxNWIyZGY1NGY0OTgyNCIsCiAgInByb2ZpbGVOYW1lIiA6ICJxdWludHVwbGV0IiwKICAic2lnbmF0dXJlUmVxdWlyZWQiIDogdHJ1ZSwKICAidGV4dHVyZXMiIDogewogICAgIlNLSU4iIDogewogICAgICAidXJsIiA6ICJodHRwOi8vdGV4dHVyZXMubWluZWNyYWZ0Lm5ldC90ZXh0dXJlL2E0MjBjNzkxMDdlZmY0NGY1Y2IzMDAzYTBmOTdhZjgxZGYwZWQzMGZkMDA0M2Y0YWFiMTEwYjU5ZmNkOTUxNmMiCiAgICB9CiAgfQp9",
+            "signature": "u9KZko/tWxXM1scacMpvAKVXIWxl4ta0/kOmbMJ9jeZ+ANEcfQKITAUhjfyKbvJcL1fuhis7JW0m28o/N50IfPhIgvQst1ZMWXJ/HqvSgK5S1XCTs/eI7iasJM+GXAd7So7KawVfknGIs7wIF/IO2XwjSXPTGcvA36APxNT0tELmnP34hdvJN0d0PPd1mPjIdciM2KmYX3t39nDz+hlvHAUTZFQDVbnZHLgowNn/VxVuvf80tUh0GWDPpty16ohAtIGPOCssz3zS7qVLAXdB1iGXJ0TPiHnTAbyLcsjmWfz5zhMmy5pTve0w73pfsi/S97Jx343el8Va9mEg9ghBuaxskqBUkiTKbEgoEZJpdkKKaBiBrbLboioXMFY8EWGodGU+CZq9/Axy5wyT4QqCuTC0nH5Db9dL7sJj8cPIKM7zottB8JJZ1h7FjE7gazgV7m2RSwllKU2lSsFX7peLW70I69mPZQ6KhcaBtLbLZCVArB9dd0n0xh0IFkP0aKsqjuqPIAOhutVjhHhV/AjN8xiRWPjNvHcnUsTgUtUy2MJw/LcJzPQGNxCQgNYP35Cm0tMwtLYAaLwSbqppTAZizReT3aW70D8TePh7tzCD/ZdrHKXChY7Y+h6R9OeD8B2OBuGWZcKRjcyUGSEomIyOjDpwBpAgLRkTnWKnPfnf8w8=",
+            "command": "Warp",
+            "args": ["bowfight"]
+        },
+        {
+            "name": "Classic",
+            "pos": [-6.5, 19, 20.5],
+            "yaw": 30.0,
+            "pitch": 0.0,
+            "skin": "ewogICJ0aW1lc3RhbXAiIDogMTY5MzczODc5NDAxOCwKICAicHJvZmlsZUlkIiA6ICJlYjA3ZmQzMmFiOTE0NjRjODVjYmU1YjVhYTlkYTRjZSIsCiAgInByb2ZpbGVOYW1lIiA6ICJ4bUUiLAogICJzaWduYXR1cmVSZXF1aXJlZCIgOiB0cnVlLAogICJ0ZXh0dXJlcyIgOiB7CiAgICAiU0tJTiIgOiB7CiAgICAgICJ1cmwiIDogImh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvNDU5ZjJjOWI3MDIwZTJiNTI4YjBkMDhkNzA5Y2QwY2U4NWIxZTJjZDQ5NTZjMDc2ODFmMDJjMDg4ODRhYTE0YSIKICAgIH0KICB9Cn0=",
+            "signature": "Kzl2afXriGH2gy47CRpS9qOkZXQCVJTN2KqLWQDuNsU44wtnlZC3zs+XvYt7mbzksWPt5yvODo4M3G4BDBanE/KayYVBydGBZdJCoKxWCB2fLbwQoogSd6TSY5pMtYmKLnjfZ5N1le9L6hxxcXZZpUiS3LHOoAJNwSPqds4h/EGT44p17+G33hqcB12kXcRPD45FPfcZ1dpNm0/dxkAmJe8OsQOCjyQDJfpsx6j4Bypc9dlRTjNy3thc2OVl4Mzqqe+Qke3RD2rE/xBq+XdGLNHfeoAKZPNcbqnypwHyZalRXKKBoLuOnrBX99H6WA+CHJKR/6deQ6+v8pVuIXlf+8z6FvVgig7e0UbMjsrKJqdSBH2nRHfJDPudNXBoGvswKQ2MkIq8XMjj6W4JBlLo5e9SbN9DXsSFvt7WMDQBycIv0ZWogaNHNO53YnQ//2KJGsuKEH/bVK3wjaGQHMm4sSGbQEVH61TzZvS5y5HqrlqskS2m9iD6FelbgXd9elubsbEqWD9zrhe5Gyf8xBrFgrPDobeykF1kuFnSZq3ZMGPQCHQk0hU7L6YmztxSyFFN89+6MZqFZyLC2pPxhbPb+2i1YunGFOk/q4/RVnoGLkKoCtXWZo78jl+RZB4Nz7k+kGzK2fAL1obViApk3Ms5bB8pyVuKcdD+gCUhD8/0YBs=",
+            "command": "Warp",
+            "args": ["classic"]
+        },
+        {
+            "name": "Roadroad Runner",
+            "pos": [-2.5, 19, 24.5],
+            "yaw": 50.0,
+            "pitch": 0.0,
+            "skin": "ewogICJ0aW1lc3RhbXAiIDogMTcyMDg5Mzk0ODQzMSwKICAicHJvZmlsZUlkIiA6ICI0OTY5YTVlZTYxMTY0MDBkYTM4YzhmZjRiMWJhZTZiZiIsCiAgInByb2ZpbGVOYW1lIiA6ICJSZWFjdFpJUCIsCiAgInNpZ25hdHVyZVJlcXVpcmVkIiA6IHRydWUsCiAgInRleHR1cmVzIiA6IHsKICAgICJTS0lOIiA6IHsKICAgICAgInVybCIgOiAiaHR0cDovL3RleHR1cmVzLm1pbmVjcmFmdC5uZXQvdGV4dHVyZS8yMzc4NzYzYzY3Mjg5MzllMWI0MDc5OWJjNDY5NWYxZDA4OGRjYzFkOWFhZDQxZWI4MDNjNzVkNDIwYmExZjk1IgogICAgfQogIH0KfQ==",
+            "signature": "ax1Jq5CfbvonOQ2xP1wk2dyORpDavqhCvwrhdWblg7AvbthDlyNUHO6mWSSGMZwqHL+2A40DnUEcKsvMJhvjpP4QYUGowv0uCWPO8IemFXdrapZvprIi+TcBBP+FAI55cABR2SuanlBFs2azvT6wBdiBoASFCYr+7IZXhjVZct2siXprwXT0xEVDCw5Zy8mMc23iItDGxjzrNrA2/we6Hfapg+NUUu4xW2tm6SSkeSQi1Ox+TH9H4Z8rLUDv/4w1NB9bZuleS/X/HGHSs1BuS9XzCYuTmzkg9D1CtEVVFv0QgSw6Z7LdrOpls30iMaqbgJbhMUWF2L03gySiQlZEKzKw99SCxmLi9DopOfEBQzPQ2fHwyogjPA/BF7S0jbipZEYv5bcHi9hmjBeEJpRkQWaiJVGpg73btnzBZQHDES64wiNIQrNnKYgT77ClqG+3tfFvfBr44iEcwc+HJjMSZZRak1UsG5e7h7ki0JMV5klHacnvbEV06iW9y4RiO6v4hacMtBixCbVC0ZwGys1uQrSSoW1KJMZYNEW2qarePDGv2XHaJoCRXSnFxMmYPd1CH8q+N/hd5QBK/fXenhYodgYWwHxFhuV0WoI/43dtv7szoudNzm+6Q4piQtLdnl9VrGuLFZaSO0euephdp/Uqq+HnwRdd5Ve/wDqEaepZjsc=",
+            "command": "Warp",
+            "args": ["trainchase"]
+        }
+    ]
+}

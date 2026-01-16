@@ -1,0 +1,30 @@
+{
+    "worlds": [
+        {
+            "path": "../worlds/waitingarea",
+            "x_chunks": [-1, 1],
+            "z_chunks": [-1, 1],
+            "spawns": [
+                {
+                    "pos": [0.5, 10.0, 0.5],
+                    "rot": [180.0, 0.0]
+                }
+            ]
+        },
+        {
+            "path": "../worlds/bowfight1",
+            "x_chunks": [-2, 2],
+            "z_chunks": [-2, 2],
+            "spawns": [
+                {
+                    "pos": [0.5, 10.0, 8],
+                    "rot": [180.0, 0.0]
+                },
+                {
+                    "pos": [0.5, 10.0, -8],
+                    "rot": [0.0, 0.0]
+                }
+            ]
+        }
+    ]
+}
