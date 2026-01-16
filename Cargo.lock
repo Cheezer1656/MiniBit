@@ -950,6 +950,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d9c4f5dac5e15c24eb999c26181a6ca40b39fe946cbe4c263c7209467bc83af2"
 
 [[package]]
+name = "foldhash"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "77ce24cb58228fbb8aa041425bb1050850ac19177686ea6e0f41a70416f56fdb"
+
+[[package]]
 name = "form_urlencoded"
 version = "1.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1100,7 +1106,7 @@ checksum = "9229cfe53dfd69f0609a49f65461bd93001ea1ef889cd5529dd176593f5338a1"
 dependencies = [
  "allocator-api2",
  "equivalent",
- "foldhash",
+ "foldhash 0.1.5",
 ]
 
 [[package]]
@@ -1108,6 +1114,11 @@ name = "hashbrown"
 version = "0.16.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "841d1cc9bed7f9236f321df977030373f4a4163ae1a7dbfe1a51a2c1a51d9100"
+dependencies = [
+ "allocator-api2",
+ "equivalent",
+ "foldhash 0.2.0",
+]
 
 [[package]]
 name = "heapless"
@@ -1470,11 +1481,11 @@ checksum = "5e5032e24019045c762d3c0f28f5b6b8bbf38563a65908389bf7978758920897"
 
 [[package]]
 name = "lru"
-version = "0.12.5"
+version = "0.16.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "234cf4f4a04dc1f57e24b96cc0cd600cf2af460d4161ac5ecdd0af8e1f3b2a38"
+checksum = "a1dc47f592c06f33f8e3aea9591776ec7c9f9e4124778ff8a3c3b87159f7e593"
 dependencies = [
- "hashbrown 0.15.5",
+ "hashbrown 0.16.1",
 ]
 
 [[package]]
@@ -2144,9 +2155,9 @@ dependencies = [
 
 [[package]]
 name = "rustc-demangle"
-version = "0.1.26"
+version = "0.1.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "56f7d92ca342cea22a06f2121d944b4fd82af56988c270852495420f961d4ace"
+checksum = "b50b8869d9fc858ce7266cce0194bd74df58b9d0e3f6df3a9fc8eb470d95c09d"
 
 [[package]]
 name = "rustc-hash"
@@ -2823,7 +2834,7 @@ dependencies = [
 [[package]]
 name = "valence"
 version = "0.2.0-alpha.1+mc.1.20.1"
-source = "git+https://github.com/valence-rs/valence#d9dbb3ed02839149eec4d5861e358fe8f18c7a9f"
+source = "git+https://github.com/valence-rs/valence#2b705351b4b99557b1a53360f73cd485c05eeb64"
 dependencies = [
  "anyhow",
  "bevy_app",
@@ -2855,7 +2866,7 @@ dependencies = [
 [[package]]
 name = "valence_advancement"
 version = "0.2.0-alpha.1+mc.1.20.1"
-source = "git+https://github.com/valence-rs/valence#d9dbb3ed02839149eec4d5861e358fe8f18c7a9f"
+source = "git+https://github.com/valence-rs/valence#2b705351b4b99557b1a53360f73cd485c05eeb64"
 dependencies = [
  "bevy_app",
  "bevy_ecs",
@@ -2868,7 +2879,7 @@ dependencies = [
 [[package]]
 name = "valence_anvil"
 version = "0.1.0"
-source = "git+https://github.com/valence-rs/valence#d9dbb3ed02839149eec4d5861e358fe8f18c7a9f"
+source = "git+https://github.com/valence-rs/valence#2b705351b4b99557b1a53360f73cd485c05eeb64"
 dependencies = [
  "bevy_app",
  "bevy_ecs",
@@ -2886,7 +2897,7 @@ dependencies = [
 [[package]]
 name = "valence_boss_bar"
 version = "0.2.0-alpha.1+mc.1.20.1"
-source = "git+https://github.com/valence-rs/valence#d9dbb3ed02839149eec4d5861e358fe8f18c7a9f"
+source = "git+https://github.com/valence-rs/valence#2b705351b4b99557b1a53360f73cd485c05eeb64"
 dependencies = [
  "bevy_app",
  "bevy_ecs",
@@ -2899,7 +2910,7 @@ dependencies = [
 [[package]]
 name = "valence_build_utils"
 version = "0.2.0-alpha.1+mc.1.20.1"
-source = "git+https://github.com/valence-rs/valence#d9dbb3ed02839149eec4d5861e358fe8f18c7a9f"
+source = "git+https://github.com/valence-rs/valence#2b705351b4b99557b1a53360f73cd485c05eeb64"
 dependencies = [
  "anyhow",
  "proc-macro2",
@@ -2909,7 +2920,7 @@ dependencies = [
 [[package]]
 name = "valence_command"
 version = "0.2.0-alpha.1+mc.1.20.1"
-source = "git+https://github.com/valence-rs/valence#d9dbb3ed02839149eec4d5861e358fe8f18c7a9f"
+source = "git+https://github.com/valence-rs/valence#2b705351b4b99557b1a53360f73cd485c05eeb64"
 dependencies = [
  "anyhow",
  "bevy_app",
@@ -2927,7 +2938,7 @@ dependencies = [
 [[package]]
 name = "valence_command_macros"
 version = "0.2.0-alpha.1+mc.1.20.1"
-source = "git+https://github.com/valence-rs/valence#d9dbb3ed02839149eec4d5861e358fe8f18c7a9f"
+source = "git+https://github.com/valence-rs/valence#2b705351b4b99557b1a53360f73cd485c05eeb64"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2937,7 +2948,7 @@ dependencies = [
 [[package]]
 name = "valence_entity"
 version = "0.2.0-alpha.1+mc.1.20.1"
-source = "git+https://github.com/valence-rs/valence#d9dbb3ed02839149eec4d5861e358fe8f18c7a9f"
+source = "git+https://github.com/valence-rs/valence#2b705351b4b99557b1a53360f73cd485c05eeb64"
 dependencies = [
  "anyhow",
  "bevy_app",
@@ -2966,7 +2977,7 @@ dependencies = [
 [[package]]
 name = "valence_equipment"
 version = "0.2.0-alpha.1+mc.1.20.1"
-source = "git+https://github.com/valence-rs/valence#d9dbb3ed02839149eec4d5861e358fe8f18c7a9f"
+source = "git+https://github.com/valence-rs/valence#2b705351b4b99557b1a53360f73cd485c05eeb64"
 dependencies = [
  "bevy_app",
  "bevy_ecs",
@@ -2979,7 +2990,7 @@ dependencies = [
 [[package]]
 name = "valence_generated"
 version = "0.2.0-alpha.1+mc.1.20.1"
-source = "git+https://github.com/valence-rs/valence#d9dbb3ed02839149eec4d5861e358fe8f18c7a9f"
+source = "git+https://github.com/valence-rs/valence#2b705351b4b99557b1a53360f73cd485c05eeb64"
 dependencies = [
  "anyhow",
  "heck",
@@ -2996,7 +3007,7 @@ dependencies = [
 [[package]]
 name = "valence_ident"
 version = "0.2.0-alpha.1+mc.1.20.1"
-source = "git+https://github.com/valence-rs/valence#d9dbb3ed02839149eec4d5861e358fe8f18c7a9f"
+source = "git+https://github.com/valence-rs/valence#2b705351b4b99557b1a53360f73cd485c05eeb64"
 dependencies = [
  "serde",
  "thiserror 1.0.69",
@@ -3006,7 +3017,7 @@ dependencies = [
 [[package]]
 name = "valence_ident_macros"
 version = "0.2.0-alpha.1+mc.1.20.1"
-source = "git+https://github.com/valence-rs/valence#d9dbb3ed02839149eec4d5861e358fe8f18c7a9f"
+source = "git+https://github.com/valence-rs/valence#2b705351b4b99557b1a53360f73cd485c05eeb64"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3016,7 +3027,7 @@ dependencies = [
 [[package]]
 name = "valence_inventory"
 version = "0.2.0-alpha.1+mc.1.20.1"
-source = "git+https://github.com/valence-rs/valence#d9dbb3ed02839149eec4d5861e358fe8f18c7a9f"
+source = "git+https://github.com/valence-rs/valence#2b705351b4b99557b1a53360f73cd485c05eeb64"
 dependencies = [
  "bevy_app",
  "bevy_ecs",
@@ -3028,7 +3039,7 @@ dependencies = [
 [[package]]
 name = "valence_lang"
 version = "0.2.0-alpha.1+mc.1.20.1"
-source = "git+https://github.com/valence-rs/valence#d9dbb3ed02839149eec4d5861e358fe8f18c7a9f"
+source = "git+https://github.com/valence-rs/valence#2b705351b4b99557b1a53360f73cd485c05eeb64"
 dependencies = [
  "anyhow",
  "heck",
@@ -3042,7 +3053,7 @@ dependencies = [
 [[package]]
 name = "valence_math"
 version = "0.2.0-alpha.1+mc.1.20.1"
-source = "git+https://github.com/valence-rs/valence#d9dbb3ed02839149eec4d5861e358fe8f18c7a9f"
+source = "git+https://github.com/valence-rs/valence#2b705351b4b99557b1a53360f73cd485c05eeb64"
 dependencies = [
  "glam",
 ]
@@ -3050,7 +3061,7 @@ dependencies = [
 [[package]]
 name = "valence_nbt"
 version = "0.8.0"
-source = "git+https://github.com/valence-rs/valence#d9dbb3ed02839149eec4d5861e358fe8f18c7a9f"
+source = "git+https://github.com/valence-rs/valence#2b705351b4b99557b1a53360f73cd485c05eeb64"
 dependencies = [
  "byteorder",
  "cesu8",
@@ -3063,7 +3074,7 @@ dependencies = [
 [[package]]
 name = "valence_network"
 version = "0.2.0-alpha.1+mc.1.20.1"
-source = "git+https://github.com/valence-rs/valence#d9dbb3ed02839149eec4d5861e358fe8f18c7a9f"
+source = "git+https://github.com/valence-rs/valence#2b705351b4b99557b1a53360f73cd485c05eeb64"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3094,7 +3105,7 @@ dependencies = [
 [[package]]
 name = "valence_player_list"
 version = "0.2.0-alpha.1+mc.1.20.1"
-source = "git+https://github.com/valence-rs/valence#d9dbb3ed02839149eec4d5861e358fe8f18c7a9f"
+source = "git+https://github.com/valence-rs/valence#2b705351b4b99557b1a53360f73cd485c05eeb64"
 dependencies = [
  "bevy_app",
  "bevy_ecs",
@@ -3106,7 +3117,7 @@ dependencies = [
 [[package]]
 name = "valence_protocol"
 version = "0.2.0-alpha.1+mc.1.20.1"
-source = "git+https://github.com/valence-rs/valence#d9dbb3ed02839149eec4d5861e358fe8f18c7a9f"
+source = "git+https://github.com/valence-rs/valence#2b705351b4b99557b1a53360f73cd485c05eeb64"
 dependencies = [
  "aes",
  "anyhow",
@@ -3135,7 +3146,7 @@ dependencies = [
 [[package]]
 name = "valence_protocol_macros"
 version = "0.2.0-alpha.1+mc.1.20.1"
-source = "git+https://github.com/valence-rs/valence#d9dbb3ed02839149eec4d5861e358fe8f18c7a9f"
+source = "git+https://github.com/valence-rs/valence#2b705351b4b99557b1a53360f73cd485c05eeb64"
 dependencies = [
  "heck",
  "proc-macro2",
@@ -3146,7 +3157,7 @@ dependencies = [
 [[package]]
 name = "valence_registry"
 version = "0.2.0-alpha.1+mc.1.20.1"
-source = "git+https://github.com/valence-rs/valence#d9dbb3ed02839149eec4d5861e358fe8f18c7a9f"
+source = "git+https://github.com/valence-rs/valence#2b705351b4b99557b1a53360f73cd485c05eeb64"
 dependencies = [
  "anyhow",
  "bevy_app",
@@ -3164,7 +3175,7 @@ dependencies = [
 [[package]]
 name = "valence_scoreboard"
 version = "0.2.0-alpha.1+mc.1.20.1"
-source = "git+https://github.com/valence-rs/valence#d9dbb3ed02839149eec4d5861e358fe8f18c7a9f"
+source = "git+https://github.com/valence-rs/valence#2b705351b4b99557b1a53360f73cd485c05eeb64"
 dependencies = [
  "bevy_app",
  "bevy_ecs",
@@ -3176,7 +3187,7 @@ dependencies = [
 [[package]]
 name = "valence_server"
 version = "0.2.0-alpha.1+mc.1.20.1"
-source = "git+https://github.com/valence-rs/valence#d9dbb3ed02839149eec4d5861e358fe8f18c7a9f"
+source = "git+https://github.com/valence-rs/valence#2b705351b4b99557b1a53360f73cd485c05eeb64"
 dependencies = [
  "anyhow",
  "arrayvec",
@@ -3204,7 +3215,7 @@ dependencies = [
 [[package]]
 name = "valence_server_common"
 version = "0.2.0-alpha.1+mc.1.20.1"
-source = "git+https://github.com/valence-rs/valence#d9dbb3ed02839149eec4d5861e358fe8f18c7a9f"
+source = "git+https://github.com/valence-rs/valence#2b705351b4b99557b1a53360f73cd485c05eeb64"
 dependencies = [
  "bevy_app",
  "bevy_ecs",
@@ -3217,7 +3228,7 @@ dependencies = [
 [[package]]
 name = "valence_text"
 version = "0.2.0-alpha.1+mc.1.20.1"
-source = "git+https://github.com/valence-rs/valence#d9dbb3ed02839149eec4d5861e358fe8f18c7a9f"
+source = "git+https://github.com/valence-rs/valence#2b705351b4b99557b1a53360f73cd485c05eeb64"
 dependencies = [
  "serde",
  "serde_json",
@@ -3230,7 +3241,7 @@ dependencies = [
 [[package]]
 name = "valence_weather"
 version = "0.2.0-alpha.1+mc.1.20.1"
-source = "git+https://github.com/valence-rs/valence#d9dbb3ed02839149eec4d5861e358fe8f18c7a9f"
+source = "git+https://github.com/valence-rs/valence#2b705351b4b99557b1a53360f73cd485c05eeb64"
 dependencies = [
  "bevy_app",
  "bevy_ecs",
@@ -3241,7 +3252,7 @@ dependencies = [
 [[package]]
 name = "valence_world_border"
 version = "0.2.0-alpha.1+mc.1.20.1"
-source = "git+https://github.com/valence-rs/valence#d9dbb3ed02839149eec4d5861e358fe8f18c7a9f"
+source = "git+https://github.com/valence-rs/valence#2b705351b4b99557b1a53360f73cd485c05eeb64"
 dependencies = [
  "bevy_app",
  "bevy_ecs",
@@ -3284,9 +3295,9 @@ checksum = "ccf3ec651a847eb01de73ccad15eb7d99f80485de043efb2f370cd654f4ea44b"
 
 [[package]]
 name = "wasip2"
-version = "1.0.1+wasi-0.2.4"
+version = "1.0.2+wasi-0.2.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0562428422c63773dad2c345a1882263bbf4d65cf3f42e90921f787ef5ad58e7"
+checksum = "9517f9239f02c069db75e65f174b3da828fe5f5b945c4dd26bd25d89c03ebcf5"
 dependencies = [
  "wit-bindgen",
 ]
@@ -3615,9 +3626,9 @@ dependencies = [
 
 [[package]]
 name = "wit-bindgen"
-version = "0.46.0"
+version = "0.51.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f17a85883d4e6d00e8a97c586de764dabcc06133f7f1d55dce5cdc070ad7fe59"
+checksum = "d7249219f66ced02969388cf2bb044a09756a083d0fab1e566056b04d9fbcaa5"
 
 [[package]]
 name = "writeable"
