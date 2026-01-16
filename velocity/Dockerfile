@@ -1,11 +1,11 @@
-FROM amazoncorretto:21-alpine3.20-jdk AS builder
+FROM amazoncorretto:21-alpine3.22-jdk AS builder
 WORKDIR /build
 COPY . .
 RUN chmod +x ./gradlew
 RUN ./gradlew build
 RUN mkdir -p /tmp/dist && cp ./build/libs/*.jar /tmp/dist
 
-FROM amazoncorretto:22-alpine3.20 AS runtime
+FROM amazoncorretto:22-alpine3.22 AS runtime
 RUN apk update && apk add build-base dumb-init curl bash sed
 WORKDIR /proxy
 RUN mkdir -p /proxy/plugins

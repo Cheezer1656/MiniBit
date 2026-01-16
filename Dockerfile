@@ -22,7 +22,7 @@ RUN cargo build --release --target $(uname -m)-unknown-linux-musl && \
     cp /build/target/$(uname -m)-unknown-linux-musl/release/minibit /build/minibit
 
 # Build the runtime image
-FROM alpine:3.23 AS runtime
+FROM alpine:3.22 AS runtime
 WORKDIR /run
 RUN mkdir -p /bin
 COPY --from=builder /build/minibit /bin/minibit
