@@ -1,60 +1,53 @@
+forwarding:
+  mode: 3
+
 bedwars:
   enabled: true
   path: bedwars
   network:
     port: 25566
-    connection_mode: 3
 bowfight:
   enabled: true
   path: bowfight
   network:
     port: 25567
-    connection_mode: 3
 boxing:
   enabled: true
   path: boxing
   network:
     port: 25568
-    connection_mode: 3
 bridge:
   enabled: true
   path: bridge
   network:
     port: 25569
-    connection_mode: 3
 classic:
   enabled: true
   path: classic
   network:
     port: 25570
-    connection_mode: 3
 lobby:
   enabled: true
   path: lobby
   network:
     port: 25571
-    connection_mode: 3
 parkour:
   enabled: true
   path: parkour
   network:
     port: 25572
-    connection_mode: 3
 spaceshooter:
   enabled: true
   path: spaceshooter
   network:
     port: 25573
-    connection_mode: 3
 sumo:
   enabled: true
   path: sumo
   network:
     port: 25574
-    connection_mode: 3
 trainchase:
   enabled: true
   path: trainchase
   network:
     port: 25575
-    connection_mode: 3

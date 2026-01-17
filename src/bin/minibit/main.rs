@@ -52,14 +52,30 @@ struct ServerConfig {
     network: NetworkConfig,
 }
 
+#[derive(Deserialize, Serialize, Clone)]
+#[serde(default)]
+struct ForwardingConfig {
+    secret: String,
+    mode: u8,
+}
+
+impl Default for ForwardingConfig {
+    fn default() -> Self {
+        ForwardingConfig {
+            secret: "".to_string(),
+            mode: 1,
+        }
+    }
+}
+
 #[rustfmt::skip]
 #[derive(Args, Default, Deserialize, Serialize)]
 #[serde(default)]
 struct Config {
-    #[arg(long, default_value = "")]
-    forwarding_secret: String,
     #[arg(long, default_value = "data")]
     data_path: PathBuf,
+
+    #[clap(skip)] forwarding: ForwardingConfig,
 
     #[clap(skip)] lobby: ServerConfig,
     #[clap(skip)] bedwars: ServerConfig,
@@ -125,7 +141,9 @@ fn main() {
 
         let mut cloned_config = server_config.clone();
         cloned_config.path = config.data_path.join(cloned_config.path);
-        cloned_config.network.forwarding_secret = config.forwarding_secret.clone();
+        cloned_config.network.forwarding_secret = config.forwarding.secret.clone();
+        cloned_config.network.connection_mode = config.forwarding.mode;
+        println!("{}", cloned_config.network.forwarding_secret);
 
         println!("Starting server {}", server);
         handles.push(thread::spawn(move || {
