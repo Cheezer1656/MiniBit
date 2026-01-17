@@ -93,7 +93,7 @@ fn main() {
         .merge(Yaml::file(
             config_path.unwrap_or(&PathBuf::from("config.yml")),
         ))
-        .merge(Env::prefixed("MINIBIT_"))
+        .merge(Env::prefixed("MINIBIT_").split("_"))
         .extract::<Config>();
 
     if let Err(e) = &config {
