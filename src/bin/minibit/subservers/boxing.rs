@@ -19,7 +19,6 @@
 #![allow(clippy::type_complexity)]
 
 use std::marker::PhantomData;
-use std::path::PathBuf;
 use bevy_ecs::query::QueryData;
 use minibit_lib::duels::{CombatState, DefaultDuelsConfig, DuelsPlugin, EndGameEvent, Entities, PlayerGameState};
 use valence::entity::{EntityId, EntityStatuses};
@@ -30,15 +29,22 @@ use valence::protocol::sound::SoundCategory;
 use valence::protocol::Sound;
 use valence::protocol::VarInt;
 use valence::protocol::WritePacket;
+use crate::ServerConfig;
 
 #[derive(Component, Default)]
 struct BoxingState {
     hits: u8,
 }
 
-pub fn main(path: PathBuf) {
+pub fn main(config: ServerConfig) {
     App::new()
-        .add_plugins(DuelsPlugin::<DefaultDuelsConfig> { path, default_gamemode: GameMode::Adventure, copy_map: false, phantom: PhantomData })
+        .add_plugins(DuelsPlugin::<DefaultDuelsConfig> {
+            path: config.path,
+            network_config: config.network,
+            default_gamemode: GameMode::Adventure,
+            copy_map: false,
+            phantom: PhantomData
+        })
         .add_plugins(DefaultPlugins)
         .add_systems(EventLoopUpdate, handle_combat_events)
         .add_systems(

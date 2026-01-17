@@ -21,79 +21,116 @@ mod subservers {
 }
 
 use crate::subservers::*;
-use clap::{Arg, arg, command, value_parser};
-use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use clap::{Args, FromArgMatches, arg, command, value_parser};
+use figment::providers::{Env, Serialized};
+use figment::{
+    Figment,
+    providers::{Format, Yaml},
+};
+use minibit_lib::config::NetworkConfig;
+use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
 use std::thread;
 use std::thread::JoinHandle;
 
 #[macro_export]
 macro_rules! subserver {
-    ($server:ident) => {
-        (stringify!($server), $server::main as fn(PathBuf))
+    ($server:ident, $config:expr) => {
+        (
+            stringify!($server),
+            $server::main as fn(ServerConfig),
+            $config.$server,
+        )
     };
 }
 
-fn main() {
-    let subservers: HashMap<&str, fn(PathBuf)> = HashMap::from([
-        subserver!(lobby),
-        subserver!(bedwars),
-        subserver!(bowfight),
-        subserver!(boxing),
-        subserver!(bridge),
-        subserver!(classic),
-        subserver!(parkour),
-        subserver!(spaceshooter),
-        subserver!(sumo),
-        subserver!(trainchase),
-    ]);
+#[derive(Default, Deserialize, Serialize, Clone)]
+#[serde(default)]
+struct ServerConfig {
+    enabled: bool,
+    path: PathBuf,
+    network: NetworkConfig,
+}
 
-    let mut matches = command!().arg(
-        arg!(--auto <FOLDER> "Automatically launches servers")
+#[rustfmt::skip]
+#[derive(Args, Default, Deserialize, Serialize)]
+#[serde(default)]
+struct Config {
+    #[arg(long, default_value = "")]
+    forwarding_secret: String,
+    #[arg(long, default_value = "data")]
+    data_path: PathBuf,
+
+    #[clap(skip)] lobby: ServerConfig,
+    #[clap(skip)] bedwars: ServerConfig,
+    #[clap(skip)] bowfight: ServerConfig,
+    #[clap(skip)] boxing: ServerConfig,
+    #[clap(skip)] bridge: ServerConfig,
+    #[clap(skip)] classic: ServerConfig,
+    #[clap(skip)] parkour: ServerConfig,
+    #[clap(skip)] spaceshooter: ServerConfig,
+    #[clap(skip)] sumo: ServerConfig,
+    #[clap(skip)] trainchase: ServerConfig,
+}
+
+fn main() {
+    let cli = command!().arg(
+        arg!(-c --config <FILE>)
             .required(false)
             .value_parser(value_parser!(PathBuf)),
     );
+    let cli = Config::augment_args(cli);
+    let matches = cli.get_matches();
 
-    for subserver in subservers.keys() {
-        matches = matches.arg(
-            Arg::new(subserver)
-                .long(subserver)
-                .required(false)
-                .value_name("FOLDER")
-                .value_parser(value_parser!(PathBuf))
-                .help(format!(
-                    "Launch {} using configuration at FOLDER",
-                    subserver
-                )),
-        )
+    let config_path = matches.get_one::<PathBuf>("config");
+
+    let derived_matches = Config::from_arg_matches(&matches)
+        .map_err(|e| e.exit())
+        .unwrap();
+
+    let config = Figment::new()
+        .merge(Serialized::defaults(derived_matches))
+        .merge(Yaml::file(
+            config_path.unwrap_or(&PathBuf::from("config.yml")),
+        ))
+        .merge(Env::prefixed("MINIBIT_").split("_"))
+        .extract::<Config>();
+
+    if let Err(e) = &config {
+        eprintln!("Error: {}", e);
     }
 
-    let matches = matches.get_matches();
+    let config = config.unwrap();
+
+    #[allow(clippy::type_complexity)]
+    let subservers: Vec<(&str, fn(ServerConfig), ServerConfig)> = vec![
+        subserver!(lobby, config),
+        subserver!(bedwars, config),
+        subserver!(bowfight, config),
+        subserver!(boxing, config),
+        subserver!(bridge, config),
+        subserver!(classic, config),
+        subserver!(parkour, config),
+        subserver!(spaceshooter, config),
+        subserver!(sumo, config),
+        subserver!(trainchase, config),
+    ];
 
     let mut handles: Vec<JoinHandle<()>> = Vec::new();
 
-    if let Some(auto) = matches.get_one::<PathBuf>("auto") {
-        let dir = Path::new(&auto);
+    for (server, run, server_config) in subservers {
+        if !server_config.enabled {
+            continue;
+        }
 
-        for (game, run) in subservers {
-            let dir = dir.join(game);
-            if dir.exists() {
-                println!("Starting {} at {}", game, dir.display());
-                handles.push(thread::spawn(move || {
-                    run(dir);
-                }));
-            }
-        }
-    } else {
-        for (game, run) in subservers {
-            if let Some(dir) = matches.get_one::<PathBuf>(game) {
-                println!("Starting {} at {}", game, dir.display());
-                let cloned = dir.clone();
-                handles.push(thread::spawn(move || {
-                    run(cloned);
-                }));
-            }
-        }
+        let mut cloned_config = server_config.clone();
+        cloned_config.path = config.data_path.join(cloned_config.path);
+        cloned_config.network.forwarding_secret = config.forwarding_secret.clone();
+
+        println!("Starting server {}", server);
+        handles.push(thread::spawn(move || {
+            run(cloned_config);
+        }));
     }
 
     for handle in handles {

@@ -14,3 +14,7 @@ target/
 
 run/proxy/velocity.jar
 run.tmp
+
+.idea/
+
+.env.compose

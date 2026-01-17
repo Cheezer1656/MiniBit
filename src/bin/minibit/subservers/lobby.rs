@@ -24,7 +24,6 @@ use std::{
     marker::PhantomData,
     time::{Duration, SystemTime},
 };
-use std::path::PathBuf;
 use minibit_lib::{config::{ConfigLoaderPlugin, WorldValue}, player::*, scopes::ScopePlugin};
 use serde::Deserialize;
 use valence::{
@@ -32,6 +31,7 @@ use valence::{
 };
 use valence_anvil::AnvilLevel;
 use minibit_lib::config::DataPath;
+use crate::ServerConfig;
 
 #[derive(Deserialize, Clone)]
 enum ActionType {
@@ -91,10 +91,11 @@ struct ParkourStatus {
     end: DVec3,
 }
 
-pub fn main(path: PathBuf) {
+pub fn main(config: ServerConfig) {
     App::new()
         .add_plugins(ConfigLoaderPlugin::<LobbyConfig> {
-            path,
+            path: config.path,
+            network_config: config.network,
             phantom: PhantomData,
         })
         .add_plugins(DefaultPlugins)

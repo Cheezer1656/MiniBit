@@ -20,7 +20,6 @@
 
 use std::collections::HashSet;
 use std::marker::PhantomData;
-use std::path::PathBuf;
 use bevy_ecs::query::QueryData;
 use minibit_lib::color::ArmorColors;
 use minibit_lib::config::WorldValue;
@@ -51,6 +50,7 @@ use valence::protocol::WritePacket;
 use minibit_lib::death::{DeathEvent, DeathPlugin, DeathSet};
 use minibit_lib::duels::oob::{OobMode, OobPlugin};
 use minibit_lib::food::golden_apple::GoldenApplePlugin;
+use crate::ServerConfig;
 
 #[derive(Event)]
 struct MessageEvent {
@@ -76,10 +76,11 @@ impl DuelsConfig for BedwarsConfig {
     }
 }
 
-pub fn main(path: PathBuf) {
+pub fn main(config: ServerConfig) {
     App::new()
         .add_plugins(DuelsPlugin::<BedwarsConfig> {
-            path,
+            path: config.path,
+            network_config: config.network,
             default_gamemode: GameMode::Survival,
             copy_map: true,
             phantom: PhantomData,

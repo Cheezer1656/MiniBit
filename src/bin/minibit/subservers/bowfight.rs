@@ -19,7 +19,6 @@
 #![allow(clippy::type_complexity)]
 
 use std::marker::PhantomData;
-use std::path::PathBuf;
 use bevy_ecs::query::QueryData;
 use minibit_lib::duels::*;
 use minibit_lib::player::InteractionBroadcastPlugin;
@@ -35,10 +34,17 @@ use valence::protocol::sound::SoundCategory;
 use valence::protocol::Sound;
 use valence::protocol::VarInt;
 use valence::protocol::WritePacket;
+use crate::ServerConfig;
 
-pub fn main(path: PathBuf) {
+pub fn main(config: ServerConfig) {
     App::new()
-        .add_plugins(DuelsPlugin::<DefaultDuelsConfig> { path, default_gamemode: GameMode::Adventure, copy_map: false, phantom: PhantomData })
+        .add_plugins(DuelsPlugin::<DefaultDuelsConfig> {
+            path: config.path,
+            network_config: config.network,
+            default_gamemode: GameMode::Adventure,
+            copy_map: false,
+            phantom: PhantomData
+        })
         .add_plugins(DefaultPlugins)
         .add_plugins((InteractionBroadcastPlugin, ProjectilePlugin))
         .add_systems(

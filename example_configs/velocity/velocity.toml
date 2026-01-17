@@ -38,7 +38,7 @@ player-info-forwarding-mode = "modern"
 
 # If you are using modern or BungeeGuard IP forwarding, configure a file that contains a unique secret here.
 # The file is expected to be UTF-8 encoded and not empty.
-forwarding-secret-file = ""
+forwarding-secret-file = "forwarding.secret"
 
 # Announce whether or not your server supports Forge. If you run a modded server, we
 # suggest turning this on.
@@ -72,7 +72,16 @@ enable-player-address-logging = true
 [servers]
 # Configure your servers here. Each key represents the server's name, and the value
 # represents the IP address of the server to connect to.
-lobby = "127.0.0.1:25566"
+bedwars = "127.0.0.1:25566"
+bowfight = "127.0.0.1:25567"
+boxing = "127.0.0.1:25568"
+bridge = "127.0.0.1:25569"
+classic = "127.0.0.1:25570"
+lobby = "127.0.0.1:25571"
+parkour = "127.0.0.1:25572"
+spaceshooter = "127.0.0.1:25573"
+sumo = "127.0.0.1:25574"
+trainchase = "127.0.0.1:25575"
 
 # In what order we should try servers when a player logs in or is kicked from a server.
 try = [

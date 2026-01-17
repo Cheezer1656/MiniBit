@@ -19,7 +19,6 @@
 #![allow(clippy::type_complexity)]
 
 use std::marker::PhantomData;
-use std::path::PathBuf;
 use bevy_ecs::query::QueryData;
 use minibit_lib::duels::{CombatState, DefaultDuelsConfig, DuelsPlugin, EndGameEvent, Entities, PlayerGameState, StartGameEvent};
 use valence::entity::living::Health;
@@ -33,10 +32,17 @@ use valence::protocol::Sound;
 use valence::protocol::VarInt;
 use valence::protocol::WritePacket;
 use minibit_lib::duels::oob::{OobMode, OobPlugin};
+use crate::ServerConfig;
 
-pub fn main(path: PathBuf) {
+pub fn main(config: ServerConfig) {
     App::new()
-        .add_plugins(DuelsPlugin::<DefaultDuelsConfig> { path, default_gamemode: GameMode::Adventure, copy_map: false, phantom: PhantomData })
+        .add_plugins(DuelsPlugin::<DefaultDuelsConfig> {
+            path: config.path,
+            network_config: config.network,
+            default_gamemode: GameMode::Adventure,
+            copy_map: false,
+            phantom: PhantomData
+        })
         .add_plugins(DefaultPlugins)
         .add_plugins(OobPlugin {
             mode: OobMode::GameEndEvent,

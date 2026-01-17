@@ -33,7 +33,7 @@ use valence::{
     protocol::{Sound, sound::SoundCategory},
 };
 
-use super::config::{ConfigLoaderPlugin, WorldValue};
+use super::config::{ConfigLoaderPlugin, NetworkConfig, WorldValue};
 
 #[derive(Component)]
 pub struct MapIndex(pub usize);
@@ -112,6 +112,7 @@ impl DuelsConfig for DefaultDuelsConfig {
 
 pub struct DuelsPlugin<T: DeserializeOwned + DuelsConfig> {
     pub path: PathBuf,
+    pub network_config: NetworkConfig,
     pub default_gamemode: GameMode,
     pub copy_map: bool,
     pub phantom: PhantomData<T>,
@@ -123,6 +124,7 @@ impl<T: Resource + DeserializeOwned + DuelsConfig + Sync + Send + 'static> Plugi
     fn build(&self, app: &mut App) {
         app.add_plugins(ConfigLoaderPlugin::<T> {
             path: self.path.clone(),
+            network_config: self.network_config.clone(),
             phantom: PhantomData,
         })
         .insert_resource(GameSettings {
