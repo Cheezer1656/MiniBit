@@ -34,8 +34,11 @@ pub struct NetworkConfig {
     pub ip: String,
     pub port: u16,
     pub max_players: usize,
-    pub connection_mode: u8,
+
     pub prevent_proxy_connections: bool,
+
+    #[serde(skip_deserializing)]
+    pub connection_mode: u8,
     #[serde(skip_deserializing)]
     pub forwarding_secret: String,
 }
