@@ -4,7 +4,7 @@ mkdir -p run.tmp/proxy/plugins
 
 velocity_jar="run.tmp/proxy/velocity.jar"
 if [ ! -e "$velocity_jar" ]; then
-  curl --output "$velocity_jar" "https://api.papermc.io/v2/projects/velocity/versions/3.3.0-SNAPSHOT/builds/415/downloads/velocity-3.3.0-SNAPSHOT-415.jar"
+  curl --output "$velocity_jar" "https://api.papermc.io/v2/projects/velocity/versions/3.3.0-SNAPSHOT/builds/436/downloads/velocity-3.3.0-SNAPSHOT-436.jar"
 fi
 
 viaversion_jar="run.tmp/proxy/plugins/viaversion.jar"
