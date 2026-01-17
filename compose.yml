@@ -5,8 +5,7 @@ services:
       - "25565:25565"
     volumes:
       - "./example_configs/velocity/velocity.toml:/proxy/velocity.toml"
-    environment:
-      VELOCITY_FORWARDING_SECRET: a
+    env_file: .env.compose
   minibit:
     build: .
     network_mode: service:velocity
@@ -14,5 +13,4 @@ services:
       - "./data:/run/data"
       - "./example_configs/velocity/minibit.yml:/run/config.yml"
     command: /bin/minibit
-    environment:
-      MINIBIT_FORWARDING_SECRET: a
+    env_file: .env.compose
