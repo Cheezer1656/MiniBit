@@ -5,6 +5,9 @@ services:
       - "25565:25565"
     volumes:
       - "./example_configs/velocity/velocity.toml:/proxy/velocity.toml"
+      - "./example_configs/velocity/viaversion:/proxy/plugins/viaversion"
+      - "./example_configs/velocity/viabackwards:/proxy/plugins/viabackwards"
+      - "./example_configs/velocity/viarewind:/proxy/plugins/viarewind"
     env_file: .env.compose
   minibit:
     build: .
