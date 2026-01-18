@@ -19,6 +19,7 @@
 #![allow(clippy::type_complexity)]
 #![allow(clippy::too_many_arguments)]
 
+use valence::layer::UpdateLayersPreClientSet;
 use super::*;
 use crate::config::DataPath;
 use valence::prelude::*;
@@ -47,7 +48,7 @@ impl<T: Resource + DeserializeOwned + DuelsConfig + Sync + Send + 'static> Plugi
     fn build(&self, app: &mut App) {
         app.add_systems(Startup, setup::<T>)
             .add_systems(Update, (init_clients::<T>,))
-            .add_systems(PostUpdate, (check_queue::<T>, end_game::<T>));
+            .add_systems(PostUpdate, (check_queue::<T>, end_game::<T>).before(UpdateLayersPreClientSet));
     }
 }
 
