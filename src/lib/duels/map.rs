@@ -203,7 +203,7 @@ pub fn start_game<T: Resource + DuelsConfig>(
 
                 layer_id.0 = entitylayer;
                 visible_chunk_layer.0 = chunklayer;
-                visible_entity_layers.0.clear();
+                visible_entity_layers.0.remove(&globals.map_layers[0]);
                 visible_entity_layers.0.insert(entitylayer);
 
                 gamestate.game_id = Some(event.0);
@@ -257,7 +257,7 @@ pub fn end_game<T: Resource + DuelsConfig>(
             };
             layer_id.0 = globals.map_layers[0];
             visible_chunk_layer.0 = globals.map_layers[0];
-            visible_entity_layers.0.clear();
+            visible_entity_layers.0.remove(&layer_id);
             visible_entity_layers.0.insert(globals.map_layers[0]);
             pos.set(config.worlds()[0].spawns[0].pos);
             health.0 = 20.0;

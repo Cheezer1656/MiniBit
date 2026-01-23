@@ -161,6 +161,7 @@ pub fn check_queue<T: Resource + DuelsConfig>(
     )>,
     mut start_game_ev: EventWriter<StartGameEvent>,
     config: Res<T>,
+    globals: Res<MapGlobals>,
     server: Res<Server>,
     dimensions: Res<DimensionTypeRegistry>,
     biomes: Res<BiomeRegistry>,
@@ -181,6 +182,7 @@ pub fn check_queue<T: Resource + DuelsConfig>(
             &server,
             &dimensions,
             &biomes,
+            &globals,
             &config,
             &data_path,
         );
@@ -204,6 +206,7 @@ fn start_game<T: Resource + DuelsConfig>(
     server: &Res<Server>,
     dimensions: &Res<DimensionTypeRegistry>,
     biomes: &Res<BiomeRegistry>,
+    globals: &Res<MapGlobals>,
     config: &Res<T>,
     data_path: &Res<DataPath>,
 ) {
@@ -241,7 +244,7 @@ fn start_game<T: Resource + DuelsConfig>(
 
         layer_id.0 = layer;
         visible_chunk_layer.0 = layer;
-        visible_entity_layers.0.clear();
+        visible_entity_layers.0.remove(&globals.queue_layer);
         visible_entity_layers.0.insert(layer);
 
         gamestate.game_id = Some(game_id);
@@ -295,7 +298,7 @@ pub fn end_game<T: Resource + DuelsConfig>(
             };
             layer_id.0 = globals.queue_layer;
             visible_chunk_layer.0 = globals.queue_layer;
-            visible_entity_layers.0.clear();
+            visible_entity_layers.0.remove(&layer_id);
             visible_entity_layers.0.insert(globals.queue_layer);
             pos.set(config.worlds()[0].spawns[0].pos);
             health.0 = 20.0;
