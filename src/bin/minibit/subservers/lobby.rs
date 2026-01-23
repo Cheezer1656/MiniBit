@@ -31,6 +31,7 @@ use valence::{
 };
 use valence_anvil::AnvilLevel;
 use minibit_lib::config::DataPath;
+use minibit_lib::scoreboard::{ScoreboardMode, ScoreboardPlugin};
 use crate::ServerConfig;
 
 #[derive(Deserialize, Clone)]
@@ -99,7 +100,11 @@ pub fn main(config: ServerConfig) {
             phantom: PhantomData,
         })
         .add_plugins(DefaultPlugins)
-        .add_plugins((ScopePlugin, commands::CommandPlugin, InteractionBroadcastPlugin))
+        .add_plugins((ScopePlugin, commands::CommandPlugin, ScoreboardPlugin {
+            name: "MINIBIT",
+            text: vec!["Welcome to MiniBit!"],
+            mode: ScoreboardMode::ServerWide,
+        }, InteractionBroadcastPlugin))
         .insert_resource(ServerGlobals {
             navigator_gui: None,
         })

@@ -21,14 +21,19 @@
 use std::marker::PhantomData;
 use std::time::SystemTime;
 
+use crate::ServerConfig;
 use bevy_ecs::query::QueryData;
-use minibit_lib::color::ArmorColors;
+use minibit_lib::color::{format, ArmorColors};
 use minibit_lib::config::WorldValue;
 use minibit_lib::damage::calc_dmg;
 use minibit_lib::damage::calc_dmg_with_weapon;
+use minibit_lib::death::{DeathEvent, DeathPlugin, DeathSet};
+use minibit_lib::duels::oob::{OobMode, OobPlugin};
 use minibit_lib::duels::*;
+use minibit_lib::food::golden_apple::GoldenApplePlugin;
 use minibit_lib::player::*;
 use minibit_lib::projectiles::*;
+use minibit_lib::scoreboard::{gen_scores, ScoreboardId, ScoreboardMode, ScoreboardPlugin};
 use minibit_lib::world::*;
 use serde::Deserialize;
 use valence::entity::living::Absorption;
@@ -48,10 +53,8 @@ use valence::protocol::sound::SoundCategory;
 use valence::protocol::Sound;
 use valence::protocol::VarInt;
 use valence::protocol::WritePacket;
-use minibit_lib::death::{DeathEvent, DeathPlugin, DeathSet};
-use minibit_lib::duels::oob::{OobMode, OobPlugin};
-use minibit_lib::food::golden_apple::GoldenApplePlugin;
-use crate::ServerConfig;
+use valence::scoreboard::ObjectiveScores;
+use valence::scoreboard::Objective;
 
 #[derive(Event)]
 struct ScoreEvent (Entity);
@@ -75,6 +78,12 @@ impl Default for BowStatus {
             slot: 44,
         }
     }
+}
+
+#[derive(Component, Default)]
+struct PlayerStatistics {
+    kills: u16,
+    deaths: u16,
 }
 
 #[derive(Resource, Deserialize)]
@@ -101,6 +110,11 @@ pub fn main(config: ServerConfig) {
         })
         .add_plugins(DefaultPlugins)
         .add_plugins((
+            ScoreboardPlugin {
+                name: "BRIDGE",
+                text: Vec::new(),
+                mode: ScoreboardMode::PerPlayer,
+            },
             InteractionBroadcastPlugin,
             DisableDropPlugin,
             ProjectilePlugin,
@@ -142,6 +156,7 @@ pub fn main(config: ServerConfig) {
                 handle_collision_events,
                 handle_death.after(DeathSet),
                 handle_score.after(check_goals).before(handle_death),
+                update_scoreboard.after(handle_score),
                 game_broadcast,
             ),
         )
@@ -158,12 +173,12 @@ fn setup(mut commands: Commands, server_config: Res<BridgeConfig>) {
 
 fn init_clients(clients: Query<Entity, Added<Client>>, mut commands: Commands) {
     for entity in clients.iter() {
-        commands.entity(entity).insert((EquipmentInventorySync, BowStatus::default()));
+        commands.entity(entity).insert((EquipmentInventorySync, BowStatus::default(), PlayerStatistics::default()));
     }
 }
 
 fn start_game(
-    mut clients: Query<(&mut Inventory, &PlayerGameState), With<Client>>,
+    mut clients: Query<(&mut Inventory, &PlayerGameState, &mut PlayerStatistics), With<Client>>,
     mut games: Query<(&Entities, &mut GameData)>,
     mut start_game: EventReader<StartGameEvent>,
 ) {
@@ -173,8 +188,10 @@ fn start_game(
             data.0.insert(1, DataValue::Int(0));
 
             for entity in entities.0.iter() {
-                if let Ok((mut inventory, gamestate)) = clients.get_mut(*entity) {
+                if let Ok((mut inventory, gamestate, mut stats)) = clients.get_mut(*entity) {
                     fill_inventory(&mut inventory, gamestate.team);
+                    stats.kills = 0;
+                    stats.deaths = 0;
                 }
             }
         }
@@ -501,6 +518,7 @@ fn handle_death(
             &Username,
             &PlayerGameState,
             &mut CombatState,
+            &mut PlayerStatistics,
         ),
         With<Client>,
     >,
@@ -510,6 +528,7 @@ fn handle_death(
     mut broadcasts: EventWriter<MessageEvent>,
     config: Res<BridgeConfig>,
 ) {
+    let mut killers = Vec::new();
     for DeathEvent(entity, show) in deaths.read() {
         if let Ok((
             mut pos,
@@ -521,10 +540,17 @@ fn handle_death(
             username,
             gamestate,
             mut combatstate,
+            mut stats,
         )) = clients.get_mut(*entity)
             && let Some(game_id) = gamestate.game_id
             && let Ok(map_index) = games.get(game_id)
         {
+            if *show {
+                stats.deaths += 1;
+                if let Some(last_attacker) = combatstate.last_attacker {
+                    killers.push(last_attacker);
+                }
+            }
             let spawn = &config.worlds[map_index.0].spawns[gamestate.team as usize];
             pos.0 = spawn.pos.into();
             look.yaw = spawn.rot[0];
@@ -560,6 +586,11 @@ fn handle_death(
                 });
             }
             combatstate.last_attacker = None;
+        }
+    }
+    for killer in killers {
+        if let Ok(mut killer) = clients.get_mut(killer) {
+            killer.9.kills += 1;
         }
     }
 }
@@ -620,6 +651,26 @@ fn handle_score(
     }
 }
 
+// TODO: Optimize
+fn update_scoreboard(
+    games: Query<(Ref<GameData>, &Entities)>,
+    clients: Query<(&ScoreboardId, Ref<PlayerStatistics>)>,
+    mut objectives: Query<&mut ObjectiveScores, With<Objective>>,
+) {
+    for (data, entities) in games.iter() {
+        if let Some(DataValue::Int(blue)) = data.0.get(&0) && let Some(DataValue::Int(red)) = data.0.get(&1) {
+            for entity in entities.0.iter() {
+                if let Ok((scoreboard_id, stats)) = clients.get(*entity) && let Ok(mut scores) = objectives.get_mut(scoreboard_id.0) {
+                    if !data.is_changed() && !stats.is_changed() {
+                        continue;
+                    }
+                    *scores = gen_scores(&gen_text(*red, *blue, stats.kills, stats.deaths));
+                }
+            }
+        }
+    }
+}
+
 fn game_broadcast(
     mut clients: Query<&mut Client>,
     games: Query<&Entities>,
@@ -637,6 +688,16 @@ fn game_broadcast(
 }
 
 // Helper functions below
+
+fn gen_text(red: i32, blue: i32, kills: u16, deaths: u16) -> Vec<String> {
+    vec![
+        format::RED.to_string()+"[R] "+"\u{2B24}".repeat(red as usize).as_str()+format::GRAY+"\u{2B24}".repeat(5 - red as usize).as_str(),
+        format::BLUE.to_string()+"[B] "+"\u{2B24}".repeat(blue as usize).as_str()+format::GRAY+"\u{2B24}".repeat(5 - blue as usize).as_str(),
+        "".to_string(),
+        format::WHITE.to_string()+"Kills: "+itoa::Buffer::new().format(kills),
+        format::WHITE.to_string()+"Deaths: "+itoa::Buffer::new().format(deaths),
+    ]
+}
 
 fn damage_player(
     attacker: &mut CombatQueryItem,

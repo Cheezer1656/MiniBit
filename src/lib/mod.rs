@@ -26,4 +26,5 @@ pub mod food;
 pub mod player;
 pub mod projectiles;
 pub mod scopes;
+pub mod scoreboard;
 pub mod world;
