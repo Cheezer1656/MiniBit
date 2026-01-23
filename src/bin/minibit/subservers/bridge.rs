@@ -71,7 +71,7 @@ struct PlayerStatistics {
 #[derive(Resource, Deserialize)]
 struct BridgeConfig {
     worlds: Vec<WorldValue>,
-    goals: Vec<[i32; 5]>,
+    goals: Vec<[i32; 6]>,
     block_restrictions: Vec<[i32; 6]>,
 }
 
@@ -303,11 +303,9 @@ fn check_goals(
     for (entity, pos, gamestate) in clients.iter() {
         if gamestate.game_id.is_some() {
             for (i, goal) in config.goals.iter().enumerate() {
-                if goal[0] <= pos.0.x as i32
-                    && goal[1] >= pos.0.x as i32
-                    && goal[2] == pos.0.y as i32
-                    && goal[3] <= pos.0.z as i32
-                    && goal[4] >= pos.0.z as i32
+                if (goal[0]..=goal[1]).contains(&(pos.0.x as i32))
+                    && (goal[2]..=goal[3]).contains(&(pos.0.y as i32))
+                    && (goal[4]..=goal[5]).contains(&(pos.0.z as i32))
                 {
                     if gamestate.team == i as u8 {
                         deaths.send(DeathEvent(entity, true));
