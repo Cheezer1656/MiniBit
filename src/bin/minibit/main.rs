@@ -143,7 +143,6 @@ fn main() {
         cloned_config.path = config.data_path.join(cloned_config.path);
         cloned_config.network.forwarding_secret = config.forwarding.secret.clone();
         cloned_config.network.connection_mode = config.forwarding.mode;
-        println!("{}", cloned_config.network.forwarding_secret);
 
         println!("Starting server {}", server);
         handles.push(thread::spawn(move || {
