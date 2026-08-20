@@ -190,7 +190,7 @@ fn setup(
         navigator_inv.set_slot(
             (row * 9 + col + 19) as u16,
             ItemStack::new(ItemKind::PlayerHead, 1).with_components(vec![
-                ItemComponent::CustomName(npc.name.clone().not_italic().into_text_component()),
+                ItemComponent::ItemName(npc.name.clone().into_text_component()),
                 ItemComponent::Profile(ResolvableProfile {
                     name: Some(npc.name.clone().replace(" ", "")),
                     id: None,
