@@ -273,12 +273,12 @@ fn handle_combat_events(
 
         let dir = (victim_pos - attacker_pos).normalize();
 
-        let knockback_xz: f64 = if attacker.state.has_bonus_knockback {
+        let knockback_xz = if attacker.state.has_bonus_knockback {
             18.0
         } else {
             8.0
         };
-        let knockback_y: f64 = if attacker.state.has_bonus_knockback {
+        let knockback_y = if attacker.state.has_bonus_knockback {
             8.432
         } else {
             6.432
