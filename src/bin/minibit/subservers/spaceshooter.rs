@@ -5,7 +5,7 @@ use minibit_lib::config::{ConfigLoaderPlugin, EmptyConfig};
 use valence::{
     entity::{
         entity::NoGravity, falling_block::{FallingBlockEntity, FallingBlockEntityBundle}, ObjectData, Velocity
-    }, event_loop::PacketEvent, prelude::*, protocol::{packets::play::HandSwingC2s, sound::SoundCategory, Sound}, spawn::IsFlat
+    }, event_loop::PacketEvent, prelude::*, protocol::{packets::play::SwingC2s, sound::SoundCategory, Sound}, spawn::IsFlat
 };
 use crate::ServerConfig;
 
@@ -101,7 +101,7 @@ fn spawn_blocks(mut clients: Query<(Entity, &mut GameState), With<EntityLayer>>,
                 layer: EntityLayerId(layer),
                 object_data: ObjectData(14),
                 entity_no_gravity: NoGravity(true),
-                velocity: Velocity(Vec3::new(0.0, 0.0, fastrand::f32() * 0.5)),
+                velocity: Velocity(DVec3::new(0.0, 0.0, fastrand::f64() * 0.5)),
                 ..Default::default()
             }).id();
             state.blocks.push(block_id);
@@ -111,7 +111,7 @@ fn spawn_blocks(mut clients: Query<(Entity, &mut GameState), With<EntityLayer>>,
 
 fn move_blocks(mut falling_blocks: Query<(Entity, &mut Position, &Velocity), With<FallingBlockEntity>>, mut commands: Commands) {
     for (entity, mut pos, vel) in falling_blocks.iter_mut() {
-        pos.0.z -= vel.0.z as f64;
+        pos.0.z -= vel.0.z;
         if pos.0.z < -10.0 {
             commands.entity(entity).insert(Despawned);
         }
@@ -125,7 +125,7 @@ fn shoot(
     mut commands: Commands
 ) {
     for pkt in packets.read() {
-        if pkt.decode::<HandSwingC2s>().is_some()
+        if pkt.decode::<SwingC2s>().is_some()
             && let Ok((mut client, player_pos, look, mut state)) = clients.get_mut(pkt.client)
         {
             let yaw = look.yaw.to_radians() as f64;
@@ -139,7 +139,7 @@ fn shoot(
             let mut pos = player_pos.0 + DVec3::new(0.0, 1.6, 0.0);
             for _ in 0..100 {
                 pos += direction;
-                client.play_particle(&Particle::Dust { rgb: Vec3::new(255.0, 0.0, 0.0), scale: 1.0 }, true, pos, Vec3::splat(0.001), 0.01, 2);
+                client.play_particle(&Particle::Dust { color: 0xff0000, scale: 1.0 }, true, false, pos, Vec3::splat(0.001), 0.01, 2);
                 let mut hit_blocks: Vec<usize> = Vec::new();
                 for (i, entity) in state.blocks.iter().enumerate() {
                     if let Ok((entity, block_pos, block_layer)) = falling_blocks.get(*entity)

@@ -8,7 +8,7 @@ use valence::entity::Velocity;
 use valence::entity::{EntityId, EntityStatuses};
 use valence::math::Vec3Swizzles;
 use valence::prelude::*;
-use valence::protocol::packets::play::DamageTiltS2c;
+use valence::protocol::packets::play::HurtAnimationS2c;
 use valence::protocol::sound::SoundCategory;
 use valence::protocol::Sound;
 use valence::protocol::VarInt;
@@ -44,7 +44,7 @@ fn start_game(
         if let Ok(entities) = games.get(event.0) {
             for entity in entities.0.iter() {
                 if let Ok(mut inv) = clients.get_mut(*entity) {
-                    inv.set_slot(36, ItemStack::new(ItemKind::IronSword, 1, None));
+                    inv.set_slot(36, ItemStack::new(ItemKind::IronSword, 1));
                 }
             }
         }
@@ -119,14 +119,14 @@ fn handle_combat_events(
         let victim_pos = victim.pos.0.xz();
         let attacker_pos = attacker.pos.0.xz();
 
-        let dir = (victim_pos - attacker_pos).normalize().as_vec2();
+        let dir = (victim_pos - attacker_pos).normalize();
 
-        let knockback_xz = if attacker.state.has_bonus_knockback {
+        let knockback_xz: f64 = if attacker.state.has_bonus_knockback {
             18.0
         } else {
             8.0
         };
-        let knockback_y = if attacker.state.has_bonus_knockback {
+        let knockback_y: f64 = if attacker.state.has_bonus_knockback {
             8.432
         } else {
             6.432
@@ -134,7 +134,7 @@ fn handle_combat_events(
 
         victim
             .client
-            .set_velocity([dir.x * knockback_xz, knockback_y, dir.y * knockback_xz]);
+            .set_velocity(DVec3::new(dir.x * knockback_xz, knockback_y, dir.y * knockback_xz));
 
         let damage = 5.83;
         if victim.health.0 > damage {
@@ -155,7 +155,7 @@ fn handle_combat_events(
             1.0,
             1.0,
         );
-        victim.client.write_packet(&DamageTiltS2c {
+        victim.client.write_packet(&HurtAnimationS2c {
             entity_id: VarInt(0),
             yaw: 0.0,
         });
@@ -166,7 +166,7 @@ fn handle_combat_events(
             1.0,
             1.0,
         );
-        attacker.client.write_packet(&DamageTiltS2c {
+        attacker.client.write_packet(&HurtAnimationS2c {
             entity_id: VarInt(victim.id.get()),
             yaw: 0.0,
         });

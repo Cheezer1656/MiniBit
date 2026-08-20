@@ -17,22 +17,20 @@ use valence::{
     player_list::{DisplayName, Listed, PlayerListEntryBundle},
     prelude::*,
     protocol::{
-        packets::play::{
-            entity_equipment_update_s2c::EquipmentEntry, EntityAnimationS2c,
-            EntityEquipmentUpdateS2c, HandSwingC2s,
-        },
         sound::SoundCategory,
         Sound, VarInt, WritePacket,
     },
     spawn::IsFlat,
 };
+use valence::protocol::packets::play::set_equipment_s2c::{EquipmentEntry, EquipmentSlot};
+use valence::protocol::packets::play::{AnimateS2c, SetEquipmentS2c, SwingC2s};
 use crate::ServerConfig;
 
 const START_POS: DVec3 = DVec3::new(0.0, 100.0, 0.0);
 const VIEW_DIST: u8 = 10;
 const GEN_DIST: i32 = 15;
 const WALL_HEIGHT: i32 = 10;
-const PUPPET_SPEED: f32 = 0.2;
+const PUPPET_SPEED: f64 = 0.2;
 
 #[derive(Resource)]
 struct Tick(u64);
@@ -303,7 +301,7 @@ fn reset_clients(
 
                 puppet_look.yaw = 0.0;
                 puppet_yaw.0 = 0.0;
-                puppet_vel.0 = Vec3::new(0.0, 0.0, PUPPET_SPEED);
+                puppet_vel.0 = DVec3::new(0.0, 0.0, PUPPET_SPEED);
                 puppet_pos.set([
                     START_POS.x + 0.5,
                     START_POS.y + 1.0,
@@ -313,7 +311,7 @@ fn reset_clients(
                 pos.0 = puppet_pos.get() + DVec3::new(0.0, 4.0, -4.0);
 
                 if let Ok((mut cop_pos, mut cop_vel)) = cops.get_mut(state.cop) {
-                    cop_vel.0 = Vec3::new(0.0, 0.0, PUPPET_SPEED);
+                    cop_vel.0 = DVec3::new(0.0, 0.0, PUPPET_SPEED);
                     cop_pos.0 = puppet_pos.get() + DVec3::new(0.0, 0.0, -3.0);
                 }
             }
@@ -399,16 +397,16 @@ fn play_animation(
                 pos.0 = START_POS + DVec3::new(1.75, 1.0, 1.0);
                 look.yaw = 145.0;
                 look.pitch = 20.0;
-                client.write_packet(&EntityEquipmentUpdateS2c {
+                client.write_packet(&SetEquipmentS2c {
                     entity_id: VarInt(puppet_id.get()),
                     equipment: vec![EquipmentEntry {
-                        slot: 0,
-                        item: ItemStack::new(ItemKind::Potion, 1, None),
+                        slot: EquipmentSlot::MainHand,
+                        item: ItemStack::new(ItemKind::Potion, 1),
                     }],
                 });
             }
             4 | 10 | 16 | 24 | 30 | 36 => {
-                client.write_packet(&EntityAnimationS2c {
+                client.write_packet(&AnimateS2c {
                     entity_id: VarInt(puppet_id.get()),
                     animation: 0,
                 });
@@ -417,10 +415,10 @@ fn play_animation(
                 puppet_yaw.0 += 3.0;
             }
             50 => {
-                client.write_packet(&EntityEquipmentUpdateS2c {
+                client.write_packet(&SetEquipmentS2c {
                     entity_id: VarInt(puppet_id.get()),
                     equipment: vec![EquipmentEntry {
-                        slot: 0,
+                        slot: EquipmentSlot::MainHand,
                         item: ItemStack::EMPTY,
                     }],
                 });
@@ -430,7 +428,7 @@ fn play_animation(
             }
             70 => {
                 client.send_chat_message("Inspector: STOP!".color(Color::RED).bold());
-                client.write_packet(&EntityAnimationS2c {
+                client.write_packet(&AnimateS2c {
                     entity_id: VarInt(cop_id.get()),
                     animation: 0,
                 });
@@ -535,13 +533,13 @@ fn manage_blocks(
                 };
                 if fastrand::u8(0..10) == 0 {
                     commands.spawn(ItemEntityBundle {
-                        item_stack: Stack(ItemStack::new(ItemKind::GoldBlock, 1, None)),
+                        item_stack: Stack(ItemStack::new(ItemKind::GoldBlock, 1)),
                         position: Position(DVec3::new(
                             block_pos.x as f64,
                             block_pos.y as f64 + fastrand::u8(1..=3) as f64,
                             block_pos.z as f64,
                         )),
-                        velocity: Velocity(Vec3::ZERO),
+                        velocity: Velocity(DVec3::ZERO),
                         entity_no_gravity: NoGravity(true),
                         layer: *entity_layer,
                         ..Default::default()
@@ -565,7 +563,7 @@ fn handle_interactions(
     mut packets: EventReader<PacketEvent>,
 ) {
     for packet in packets.read() {
-        if packet.decode::<HandSwingC2s>().is_some()
+        if packet.decode::<SwingC2s>().is_some()
             && let Ok(state) = clients.get(packet.client)
             && let Ok((mut ducking, mut pose)) = puppets.get_mut(state.puppet)
         {
@@ -590,10 +588,10 @@ fn handle_movement(
             if pos.0 != puppet_pos.get() + DVec3::new(0.0, 4.0, -4.0)
                 && (pos.0 * 100.0).round() / 100.0 != (old_pos.get() * 100.0).round() / 100.0
             {
-                let vel = Vec3::new(
-                    (pos.0.x - old_pos.get().x) as f32,
-                    (pos.0.y - old_pos.get().y) as f32,
-                    (pos.0.z - old_pos.get().z) as f32,
+                let vel = DVec3::new(
+                    pos.0.x - old_pos.get().x,
+                    pos.0.y - old_pos.get().y,
+                    pos.0.z - old_pos.get().z,
                 ) * 2.0;
                 if vel.x != 0.0 {
                     puppet_vel.0.x = vel.x;
@@ -603,15 +601,15 @@ fn handle_movement(
                 }
             }
 
-            let mut vel = Vec3::ZERO;
+            let mut vel = DVec3::ZERO;
 
             vel.y = if pos.0.y - START_POS.y != 4.1 {
-                (START_POS.y + 4.0 - pos.0.y) as f32
+                START_POS.y + 4.0 - pos.0.y
             } else {
                 0.0
             };
             vel.z = if puppet_pos.0.z - pos.0.z != 4.1 {
-                (puppet_pos.0.z - 4.0 - pos.0.z) as f32 * PUPPET_SPEED * 100.0
+                (puppet_pos.0.z - 4.0 - pos.0.z) * PUPPET_SPEED * 100.0
             } else {
                 PUPPET_SPEED * 20.0
             };
@@ -630,7 +628,7 @@ fn apply_physics(
 ) {
     for (mut puppet_pos, mut vel, owner) in npcs.iter_mut() {
         if let Ok(layer) = clients.get(owner.0) {
-            let block = layer.block(BlockPos::from(puppet_pos.0 + DVec3::from(vel.0)));
+            let block = layer.block(BlockPos::from(puppet_pos.0 + vel.0));
             vel.0.y = if let Some(block) = block {
                 if block.state != BlockState::AIR
                     && block.state != BlockState::RAIL
@@ -647,7 +645,7 @@ fn apply_physics(
                 vel.0.x -= vel.0.x * 0.1;
             }
             puppet_pos.0.x = puppet_pos.x.clamp(-0.5, 1.5);
-            puppet_pos.0 += DVec3::from(vel.0);
+            puppet_pos.0 += vel.0;
         }
     }
 }

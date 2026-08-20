@@ -2,8 +2,8 @@
 
 use super::*;
 use crate::config::DataPath;
+use valence::anvil::AnvilLevel;
 use valence::prelude::*;
-use valence_anvil::AnvilLevel;
 
 #[derive(Bundle)]
 pub struct Game {

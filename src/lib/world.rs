@@ -57,7 +57,7 @@ fn handle_digging_events(
                     let count = inv.slot(slot).count + 1;
                     inv.set_slot_amount(slot, count);
                 } else if let Some(slot) = inv.first_empty_slot_in(9..45) {
-                    inv.set_slot(slot, ItemStack::new(item_kind, 1, None));
+                    inv.set_slot(slot, ItemStack::new(item_kind, 1));
                 }
                 // If it is a bed, break the other half
                 if let Some(part) = block.state.get(PropName::Part)

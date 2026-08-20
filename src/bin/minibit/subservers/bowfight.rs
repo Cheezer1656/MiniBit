@@ -11,7 +11,7 @@ use valence::entity::{EntityId, EntityStatuses};
 use valence::equipment::EquipmentInventorySync;
 use valence::math::Vec3Swizzles;
 use valence::prelude::*;
-use valence::protocol::packets::play::DamageTiltS2c;
+use valence::protocol::packets::play::HurtAnimationS2c;
 use valence::protocol::sound::SoundCategory;
 use valence::protocol::Sound;
 use valence::protocol::VarInt;
@@ -64,8 +64,8 @@ fn gamestage_change(
         if let Ok(entities) = games.get(event.game_id) {
             for entity in entities.0.iter() {
                 if let Ok(mut inventory) = clients.get_mut(*entity) {
-                    inventory.set_slot(36, ItemStack::new(ItemKind::Bow, 1, None));
-                    inventory.set_slot(44, ItemStack::new(ItemKind::Arrow, 10, None));
+                    inventory.set_slot(36, ItemStack::new(ItemKind::Bow, 1));
+                    inventory.set_slot(44, ItemStack::new(ItemKind::Arrow, 10));
                 }
             }
         }
@@ -178,7 +178,7 @@ fn handle_collision_events(
             damage_player(
                 &mut attacker,
                 &mut victim,
-                0.13 * vel.0.length(),
+                (0.13 * vel.0.length()) as f32,
                 Vec3::new(0.0, 0.0, 0.0),
                 &mut end_game,
             );
@@ -235,7 +235,7 @@ fn damage_player(
         1.0,
         1.0,
     );
-    victim.client.write_packet(&DamageTiltS2c {
+    victim.client.write_packet(&HurtAnimationS2c {
         entity_id: VarInt(0),
         yaw: 0.0,
     });
@@ -246,7 +246,7 @@ fn damage_player(
         1.0,
         1.0,
     );
-    attacker.client.write_packet(&DamageTiltS2c {
+    attacker.client.write_packet(&HurtAnimationS2c {
         entity_id: VarInt(victim.id.get()),
         yaw: 0.0,
     });

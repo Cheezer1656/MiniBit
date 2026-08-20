@@ -22,13 +22,13 @@ use valence::equipment::EquipmentInventorySync;
 use valence::inventory::HeldItem;
 use valence::math::IVec3;
 use valence::math::Vec3Swizzles;
-use valence::nbt::compound;
 use valence::prelude::*;
-use valence::protocol::packets::play::DamageTiltS2c;
+use valence::protocol::packets::play::HurtAnimationS2c;
 use valence::protocol::sound::SoundCategory;
 use valence::protocol::Sound;
 use valence::protocol::VarInt;
 use valence::protocol::WritePacket;
+use valence::item::ItemComponent;
 use minibit_lib::death::{DeathEvent, DeathPlugin, DeathSet};
 use minibit_lib::duels::oob::{OobMode, OobPlugin};
 use minibit_lib::food::golden_apple::GoldenApplePlugin;
@@ -150,29 +150,30 @@ fn start_game(
 }
 
 fn fill_inventory(inv: &mut Inventory, team: u8) {
-    let armor_nbt = Some(compound! {
-        "display" => compound! {
-            "color" => match team {
+    let armor_components = vec![
+        ItemComponent::DyedColor {
+            color: match team {
                 0 => ArmorColors::Blue as i32,
                 1 => ArmorColors::Red as i32,
                 _ => 0,
-            }
+            },
         }
-    });
+    ];
+
     inv.set_slot(
         5,
-        ItemStack::new(ItemKind::LeatherHelmet, 1, armor_nbt.clone()),
+        ItemStack::new(ItemKind::LeatherHelmet, 1).with_components(armor_components.clone()),
     );
     inv.set_slot(
         6,
-        ItemStack::new(ItemKind::LeatherChestplate, 1, armor_nbt.clone()),
+        ItemStack::new(ItemKind::LeatherChestplate, 1).with_components(armor_components.clone()),
     );
     inv.set_slot(
         7,
-        ItemStack::new(ItemKind::LeatherLeggings, 1, armor_nbt.clone()),
+        ItemStack::new(ItemKind::LeatherLeggings, 1).with_components(armor_components.clone()),
     );
-    inv.set_slot(8, ItemStack::new(ItemKind::LeatherBoots, 1, armor_nbt));
-    inv.set_slot(36, ItemStack::new(ItemKind::WoodenSword, 1, None));
+    inv.set_slot(8, ItemStack::new(ItemKind::LeatherBoots, 1).with_components(armor_components.clone()));
+    inv.set_slot(36, ItemStack::new(ItemKind::WoodenSword, 1));
 }
 
 fn end_game(
@@ -206,7 +207,7 @@ fn gen_iron(
     for layer_id in games.iter() {
         for loc in &config.generator_locations {
             commands.spawn(ItemEntityBundle {
-                item_stack: Stack(ItemStack::new(ItemKind::IronIngot, 1, None)),
+                item_stack: Stack(ItemStack::new(ItemKind::IronIngot, 1)),
                 position: Position(DVec3::from_array(*loc) + DVec3::new(0.0, 2.0, 0.0)),
                 layer: *layer_id,
                 ..Default::default()
@@ -270,14 +271,14 @@ fn handle_combat_events(
         let victim_pos = victim.pos.0.xz();
         let attacker_pos = attacker.pos.0.xz();
 
-        let dir = (victim_pos - attacker_pos).normalize().as_vec2();
+        let dir = (victim_pos - attacker_pos).normalize();
 
-        let knockback_xz = if attacker.state.has_bonus_knockback {
+        let knockback_xz: f64 = if attacker.state.has_bonus_knockback {
             18.0
         } else {
             8.0
         };
-        let knockback_y = if attacker.state.has_bonus_knockback {
+        let knockback_y: f64 = if attacker.state.has_bonus_knockback {
             8.432
         } else {
             6.432
@@ -295,7 +296,7 @@ fn handle_combat_events(
             &mut attacker,
             &mut victim,
             dmg,
-            Vec3::new(dir.x * knockback_xz, knockback_y, dir.y * knockback_xz),
+            DVec3::new(dir.x * knockback_xz, knockback_y, dir.y * knockback_xz),
             &mut deaths,
         );
 
@@ -319,7 +320,7 @@ fn handle_collision_events(
 
             // TODO: Make the damage accurate
             let dmg = calc_dmg(
-                0.13 * vel.0.length(),
+                (0.13 * vel.0.length()) as f32,
                 victim.inv.slot(5).item,
                 victim.inv.slot(6).item,
                 victim.inv.slot(7).item,
@@ -527,13 +528,13 @@ fn damage_player(
     attacker: &mut CombatQueryItem,
     victim: &mut CombatQueryItem,
     damage: f32,
-    velocity: Vec3,
+    velocity: DVec3,
     deaths: &mut EventWriter<DeathEvent>,
 ) {
-    let old_vel = Vec3::new(
-        (victim.pos.0.x - victim.old_pos.get().x) as f32,
-        (victim.pos.0.y - victim.old_pos.get().y) as f32,
-        (victim.pos.0.z - victim.old_pos.get().z) as f32,
+    let old_vel = DVec3::new(
+        victim.pos.0.x - victim.old_pos.get().x,
+        victim.pos.0.y - victim.old_pos.get().y,
+        victim.pos.0.z - victim.old_pos.get().z,
     );
 
     victim.client.set_velocity(old_vel + velocity);
@@ -547,7 +548,7 @@ fn damage_player(
         1.0,
         1.0,
     );
-    victim.client.write_packet(&DamageTiltS2c {
+    victim.client.write_packet(&HurtAnimationS2c {
         entity_id: VarInt(0),
         yaw: 0.0,
     });
@@ -558,7 +559,7 @@ fn damage_player(
         1.0,
         1.0,
     );
-    attacker.client.write_packet(&DamageTiltS2c {
+    attacker.client.write_packet(&HurtAnimationS2c {
         entity_id: VarInt(victim.id.get()),
         yaw: 0.0,
     });

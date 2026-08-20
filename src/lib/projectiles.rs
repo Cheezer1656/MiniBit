@@ -137,8 +137,10 @@ fn handle_player_actions(
 
             let tick_diff = server.current_tick() - player.draw_tick.0;
 
-            let vel = Vec3::new(x / mag, y / mag, z / mag) * tick_diff.clamp(0, 20) as f32 * 3.0;
-            let dir = vel.normalize().as_dvec3() * 0.5;
+            let vel = DVec3::new((x / mag) as f64, (y / mag) as f64, (z / mag) as f64)
+                * tick_diff.clamp(0, 20) as f64
+                * 3.0;
+            let dir = vel.normalize() * 0.5;
             let arrow_id = commands
                 .spawn(ArrowEntityBundle {
                     position: Position(DVec3::new(
@@ -169,7 +171,7 @@ pub fn apply_arrow_physics(
     mut commands: Commands,
 ) {
     for (entity, mut pos, mut vel) in arrows.iter_mut() {
-        pos.0 += DVec3::from(vel.0) / 20.0;
+        pos.0 += vel.0 / 20.0;
 
         // Gravity
         vel.0.y -= 1.0;
@@ -183,7 +185,11 @@ pub fn apply_arrow_physics(
             Vector::new(pos.0.x as f32, pos.0.y as f32, pos.0.z as f32),
             na::zero(),
         );
-        let arrow_vel = Vector::new(vel.0.x / 100.0, vel.0.y / 100.0, vel.0.z / 100.0);
+        let arrow_vel = Vector::new(
+            vel.0.x as f32 / 100.0,
+            vel.0.y as f32 / 100.0,
+            vel.0.z as f32 / 100.0,
+        );
 
         let player_shape = Cuboid::new(Vector::new(0.6, 0.9, 0.6));
 
@@ -197,9 +203,9 @@ pub fn apply_arrow_physics(
                 na::zero(),
             );
             let player_vel = Vector::new(
-                player_vel.0.x / 100.0,
-                player_vel.0.y / 100.0,
-                player_vel.0.z / 100.0,
+                player_vel.0.x as f32 / 100.0,
+                player_vel.0.y as f32 / 100.0,
+                player_vel.0.z as f32 / 100.0,
             );
 
             if cast_shapes(

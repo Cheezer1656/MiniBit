@@ -26,17 +26,15 @@ use valence::equipment::EquipmentInventorySync;
 use valence::inventory::HeldItem;
 use valence::math::IVec3;
 use valence::math::Vec3Swizzles;
-use valence::nbt::compound;
-use valence::nbt::List;
 use valence::prelude::*;
-use valence::protocol::packets::play::DamageTiltS2c;
-use valence::protocol::packets::play::ExperienceBarUpdateS2c;
+use valence::protocol::packets::play::{HurtAnimationS2c, SetExperienceS2c};
 use valence::protocol::sound::SoundCategory;
 use valence::protocol::Sound;
 use valence::protocol::VarInt;
 use valence::protocol::WritePacket;
 use valence::scoreboard::ObjectiveScores;
 use valence::scoreboard::Objective;
+use valence::item::ItemComponent;
 
 #[derive(Event)]
 struct ScoreEvent (Entity);
@@ -237,15 +235,15 @@ fn gamestage_change(
 }
 
 fn fill_inventory(inv: &mut Inventory, team: u8) {
-    let armor_nbt = Some(compound! {
-        "display" => compound! {
-            "color" => match team {
+    let armor_components = vec![
+        ItemComponent::DyedColor {
+            color: match team {
                 0 => ArmorColors::Blue as i32,
                 1 => ArmorColors::Red as i32,
                 _ => 0,
-            }
+            },
         }
-    });
+    ];
     let block_type = match team {
         0 => ItemKind::BlueTerracotta,
         1 => ItemKind::RedTerracotta,
@@ -253,27 +251,24 @@ fn fill_inventory(inv: &mut Inventory, team: u8) {
     };
     inv.set_slot(
         6,
-        ItemStack::new(ItemKind::LeatherChestplate, 1, armor_nbt.clone()),
+        ItemStack::new(ItemKind::LeatherChestplate, 1).with_components(armor_components.clone()),
     );
     inv.set_slot(
         7,
-        ItemStack::new(ItemKind::LeatherLeggings, 1, armor_nbt.clone()),
+        ItemStack::new(ItemKind::LeatherLeggings, 1).with_components(armor_components.clone()),
     );
-    inv.set_slot(8, ItemStack::new(ItemKind::LeatherBoots, 1, armor_nbt));
-    inv.set_slot(36, ItemStack::new(ItemKind::IronSword, 1, None));
-    inv.set_slot(37, ItemStack::new(ItemKind::Bow, 1, None));
-    inv.set_slot(38, ItemStack::new(ItemKind::DiamondPickaxe, 1, Some(compound! {
-        "Enchantments" => List::Compound(vec! [
-            compound! {
-                "id" => "efficiency",
-                "lvl" => 2
-            }
-        ])
-    })));
-    inv.set_slot(39, ItemStack::new(block_type, 64, None));
-    inv.set_slot(40, ItemStack::new(block_type, 64, None));
-    inv.set_slot(41, ItemStack::new(ItemKind::GoldenApple, 8, None));
-    inv.set_slot(44, ItemStack::new(ItemKind::Arrow, 1, None));
+    inv.set_slot(8, ItemStack::new(ItemKind::LeatherBoots, 1).with_components(armor_components.clone()));
+    inv.set_slot(36, ItemStack::new(ItemKind::IronSword, 1));
+    inv.set_slot(37, ItemStack::new(ItemKind::Bow, 1));
+    inv.set_slot(38, ItemStack::new(ItemKind::DiamondPickaxe, 1).with_components(vec![
+        ItemComponent::Enchantments(vec![
+            (RegistryId::new(8), VarInt(2)), // Efficiency 2 - trust me
+        ]),
+    ]));
+    inv.set_slot(39, ItemStack::new(block_type, 64));
+    inv.set_slot(40, ItemStack::new(block_type, 64));
+    inv.set_slot(41, ItemStack::new(ItemKind::GoldenApple, 8));
+    inv.set_slot(44, ItemStack::new(ItemKind::Arrow, 1));
 }
 
 fn end_game(
@@ -334,21 +329,21 @@ fn update_bow_cooldown(
 
         let tick_diff = bow_status.cooldown - tick;
         if tick_diff % 5 == 0 {
-            client.write_packet(&ExperienceBarUpdateS2c {
+            client.write_packet(&SetExperienceS2c {
                 bar: tick_diff as f32 / 60.0,
                 level: VarInt(0),
                 total_xp: VarInt(0),
             });
         } else if tick_diff == 59 {
-            client.write_packet(&ExperienceBarUpdateS2c {
+            client.write_packet(&SetExperienceS2c {
                 bar: 1.0,
                 level: VarInt(0),
                 total_xp: VarInt(0),
             });
         }
         if bow_status.cooldown < tick {
-            inv.set_slot(bow_status.slot, ItemStack::new(ItemKind::Arrow, 1, None));
-            client.write_packet(&ExperienceBarUpdateS2c {
+            inv.set_slot(bow_status.slot, ItemStack::new(ItemKind::Arrow, 1));
+            client.write_packet(&SetExperienceS2c {
                 bar: 0.0,
                 level: VarInt(0),
                 total_xp: VarInt(0),
@@ -461,7 +456,7 @@ fn handle_collision_events(
 
             // TODO: Make the damage accurate
             let dmg = calc_dmg(
-                0.13 * vel.0.length(),
+                (0.13 * vel.0.length()) as f32,
                 victim.inv.slot(5).item,
                 victim.inv.slot(6).item,
                 victim.inv.slot(7).item,
@@ -472,7 +467,7 @@ fn handle_collision_events(
                 &mut attacker,
                 &mut victim,
                 dmg,
-                vel.0.normalize().with_y(0.0) * 0.6 * 20.0, // TODO: Make the knockback accurate
+                vel.0.normalize().with_y(0.0).as_vec3() * 0.6 * 20.0, // TODO: Make the knockback accurate
                 &mut deaths,
             );
             attacker.client.play_sound(
@@ -703,7 +698,7 @@ fn damage_player(
         1.0,
         1.0,
     );
-    victim.client.write_packet(&DamageTiltS2c {
+    victim.client.write_packet(&HurtAnimationS2c {
         entity_id: VarInt(0),
         yaw: 0.0,
     });
@@ -714,7 +709,7 @@ fn damage_player(
         1.0,
         1.0,
     );
-    attacker.client.write_packet(&DamageTiltS2c {
+    attacker.client.write_packet(&HurtAnimationS2c {
         entity_id: VarInt(victim.id.get()),
         yaw: 0.0,
     });
