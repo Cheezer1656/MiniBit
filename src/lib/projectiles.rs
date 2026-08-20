@@ -2,23 +2,20 @@
 #![allow(clippy::type_complexity)]
 
 use bevy_ecs::query::QueryData;
+use chunkedge::inventory::player_inventory::PlayerInventory;
+use chunkedge::{
+    entity::{Velocity, arrow::ArrowEntity},
+    event_loop::PacketMessage,
+    interact_item::InteractItemMessage,
+    inventory::{HeldItem, PlayerAction},
+    prelude::*,
+    protocol::{Sound, packets::play::PlayerActionC2s, sound::SoundCategory},
+};
 use parry3d::{
     math::Vector,
     na::{self, Isometry3},
     query::{ShapeCastOptions, cast_shapes},
     shape::Cuboid,
-};
-use valence::inventory::player_inventory::PlayerInventory;
-use valence::{
-    entity::{
-        Velocity,
-        arrow::{ArrowEntity, ArrowEntityBundle},
-    },
-    event_loop::PacketEvent,
-    interact_item::InteractItemEvent,
-    inventory::{HeldItem, PlayerAction},
-    prelude::*,
-    protocol::{Sound, packets::play::PlayerActionC2s, sound::SoundCategory},
 };
 
 #[derive(Component)]
@@ -27,8 +24,8 @@ struct BowDrawTick(pub i64, pub Hand);
 #[derive(Component)]
 pub struct ProjectileOwner(pub Entity);
 
-#[derive(Event)]
-pub struct ProjectileCollisionEvent {
+#[derive(Message)]
+pub struct ProjectileCollisionMessage {
     pub arrow: Entity,
     pub player: Entity,
 }
@@ -37,7 +34,7 @@ pub struct ProjectilePlugin;
 
 impl Plugin for ProjectilePlugin {
     fn build(&self, app: &mut App) {
-        app.add_event::<ProjectileCollisionEvent>()
+        app.add_message::<ProjectileCollisionMessage>()
             .add_systems(EventLoopUpdate, (set_use_tick, handle_player_actions))
             .add_systems(Update, (init_clients, apply_arrow_physics, cleanup_arrows));
     }
@@ -53,13 +50,13 @@ fn init_clients(clients: Query<Entity, Added<Client>>, mut commands: Commands) {
 
 fn set_use_tick(
     mut clients: Query<(&Inventory, &HeldItem, &mut BowDrawTick), With<Client>>,
-    mut events: EventReader<InteractItemEvent>,
+    mut messages: MessageReader<InteractItemMessage>,
     server: Res<Server>,
 ) {
-    for event in events.read() {
-        if let Ok((inv, held_item, mut draw_tick)) = clients.get_mut(event.client)
+    for message in messages.read() {
+        if let Ok((inv, held_item, mut draw_tick)) = clients.get_mut(message.client)
             && inv
-                .slot(match event.hand {
+                .slot(match message.hand {
                     Hand::Main => held_item.slot(),
                     Hand::Off => PlayerInventory::SLOT_OFFHAND,
                 })
@@ -67,7 +64,7 @@ fn set_use_tick(
                 == ItemKind::Bow
         {
             draw_tick.0 = server.current_tick();
-            draw_tick.1 = event.hand;
+            draw_tick.1 = message.hand;
         }
     }
 }
@@ -87,7 +84,7 @@ struct ActionQuery {
 fn handle_player_actions(
     mut players: Query<ActionQuery>,
     mut clients: Query<&mut Client>,
-    mut packets: EventReader<PacketEvent>,
+    mut packets: MessageReader<PacketMessage>,
     mut commands: Commands,
     server: Res<Server>,
 ) {
@@ -137,21 +134,23 @@ fn handle_player_actions(
 
             let tick_diff = server.current_tick() - player.draw_tick.0;
 
-            let vel = Vec3::new(x / mag, y / mag, z / mag) * tick_diff.clamp(0, 20) as f32 * 3.0;
-            let dir = vel.normalize().as_dvec3() * 0.5;
+            let vel = DVec3::new((x / mag) as f64, (y / mag) as f64, (z / mag) as f64)
+                * tick_diff.clamp(0, 20) as f64
+                * 3.0;
+            let dir = vel.normalize() * 0.5;
             let arrow_id = commands
-                .spawn(ArrowEntityBundle {
-                    position: Position(DVec3::new(
+                .spawn((
+                    ArrowEntity,
+                    Position(DVec3::new(
                         player.pos.0.x + dir.x,
                         player.pos.0.y + 1.62,
                         player.pos.0.z + dir.z,
                     )),
-                    look: *player.look,
-                    head_yaw: *player.yaw,
-                    velocity: Velocity(vel),
-                    layer: *player.layer,
-                    ..Default::default()
-                })
+                    *player.look,
+                    *player.yaw,
+                    Velocity(vel),
+                    *player.layer,
+                ))
                 .id();
             commands
                 .entity(arrow_id)
@@ -165,11 +164,11 @@ fn handle_player_actions(
 pub fn apply_arrow_physics(
     mut arrows: Query<(Entity, &mut Position, &mut Velocity), With<ArrowEntity>>,
     players: Query<(Entity, &Position, &Velocity), (With<Client>, Without<ArrowEntity>)>,
-    mut collisions: EventWriter<ProjectileCollisionEvent>,
+    mut collisions: MessageWriter<ProjectileCollisionMessage>,
     mut commands: Commands,
 ) {
     for (entity, mut pos, mut vel) in arrows.iter_mut() {
-        pos.0 += DVec3::from(vel.0) / 20.0;
+        pos.0 += vel.0 / 20.0;
 
         // Gravity
         vel.0.y -= 1.0;
@@ -183,7 +182,11 @@ pub fn apply_arrow_physics(
             Vector::new(pos.0.x as f32, pos.0.y as f32, pos.0.z as f32),
             na::zero(),
         );
-        let arrow_vel = Vector::new(vel.0.x / 100.0, vel.0.y / 100.0, vel.0.z / 100.0);
+        let arrow_vel = Vector::new(
+            vel.0.x as f32 / 100.0,
+            vel.0.y as f32 / 100.0,
+            vel.0.z as f32 / 100.0,
+        );
 
         let player_shape = Cuboid::new(Vector::new(0.6, 0.9, 0.6));
 
@@ -197,9 +200,9 @@ pub fn apply_arrow_physics(
                 na::zero(),
             );
             let player_vel = Vector::new(
-                player_vel.0.x / 100.0,
-                player_vel.0.y / 100.0,
-                player_vel.0.z / 100.0,
+                player_vel.0.x as f32 / 100.0,
+                player_vel.0.y as f32 / 100.0,
+                player_vel.0.z as f32 / 100.0,
             );
 
             if cast_shapes(
@@ -215,7 +218,7 @@ pub fn apply_arrow_physics(
             .is_some()
             {
                 commands.entity(entity).insert(Despawned);
-                collisions.send(ProjectileCollisionEvent {
+                collisions.write(ProjectileCollisionMessage {
                     arrow: entity,
                     player: player_entity,
                 });

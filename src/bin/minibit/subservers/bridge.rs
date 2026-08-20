@@ -9,7 +9,7 @@ use minibit_lib::color::{format, ArmorColors};
 use minibit_lib::config::WorldValue;
 use minibit_lib::damage::calc_dmg;
 use minibit_lib::damage::calc_dmg_with_weapon;
-use minibit_lib::death::{DeathEvent, DeathPlugin, DeathSet};
+use minibit_lib::death::{DeathMessage, DeathPlugin, DeathSet};
 use minibit_lib::duels::oob::{OobMode, OobPlugin};
 use minibit_lib::duels::*;
 use minibit_lib::food::golden_apple::GoldenApplePlugin;
@@ -18,31 +18,29 @@ use minibit_lib::projectiles::*;
 use minibit_lib::scoreboard::{gen_scores, ScoreboardId, ScoreboardMode, ScoreboardPlugin};
 use minibit_lib::world::*;
 use serde::Deserialize;
-use valence::entity::living::Absorption;
-use valence::entity::living::Health;
-use valence::entity::Velocity;
-use valence::entity::{EntityId, EntityStatuses};
-use valence::equipment::EquipmentInventorySync;
-use valence::inventory::HeldItem;
-use valence::math::IVec3;
-use valence::math::Vec3Swizzles;
-use valence::nbt::compound;
-use valence::nbt::List;
-use valence::prelude::*;
-use valence::protocol::packets::play::DamageTiltS2c;
-use valence::protocol::packets::play::ExperienceBarUpdateS2c;
-use valence::protocol::sound::SoundCategory;
-use valence::protocol::Sound;
-use valence::protocol::VarInt;
-use valence::protocol::WritePacket;
-use valence::scoreboard::ObjectiveScores;
-use valence::scoreboard::Objective;
+use chunkedge::entity::living::Absorption;
+use chunkedge::entity::living::Health;
+use chunkedge::entity::Velocity;
+use chunkedge::entity::{EntityId, EntityStatuses};
+use chunkedge::equipment::EquipmentInventorySync;
+use chunkedge::inventory::HeldItem;
+use chunkedge::math::IVec3;
+use chunkedge::math::Vec3Swizzles;
+use chunkedge::prelude::*;
+use chunkedge::protocol::packets::play::{HurtAnimationS2c, SetExperienceS2c};
+use chunkedge::protocol::sound::SoundCategory;
+use chunkedge::protocol::Sound;
+use chunkedge::protocol::VarInt;
+use chunkedge::protocol::WritePacket;
+use chunkedge::scoreboard::ObjectiveScores;
+use chunkedge::scoreboard::Objective;
+use chunkedge::item::ItemComponent;
 
-#[derive(Event)]
-struct ScoreEvent (Entity);
+#[derive(Message)]
+struct ScoreMessage (Entity);
 
-#[derive(Event)]
-struct MessageEvent {
+#[derive(Message)]
+struct MessageMessage {
     game: Entity,
     msg: Text,
 }
@@ -122,8 +120,8 @@ pub fn main(config: ServerConfig) {
                 bounds_y: 75.0..,
             },
         ))
-        .add_event::<ScoreEvent>()
-        .add_event::<MessageEvent>()
+        .add_message::<ScoreMessage>()
+        .add_message::<MessageMessage>()
         .add_systems(Startup, setup)
         .add_systems(EventLoopUpdate, handle_combat_events)
         .add_systems(
@@ -162,10 +160,10 @@ fn init_clients(clients: Query<Entity, Added<Client>>, mut commands: Commands) {
 fn start_game(
     mut clients: Query<(&mut Inventory, &PlayerGameState, &mut PlayerStatistics), With<Client>>,
     mut games: Query<(&Entities, &mut GameData)>,
-    mut start_game: EventReader<StartGameEvent>,
+    mut start_game: MessageReader<StartGameMessage>,
 ) {
-    for event in start_game.read() {
-        if let Ok((entities, mut data)) = games.get_mut(event.0) {
+    for message in start_game.read() {
+        if let Ok((entities, mut data)) = games.get_mut(message.0) {
             data.0.insert(0, DataValue::Int(0));
             data.0.insert(1, DataValue::Int(0));
 
@@ -184,17 +182,17 @@ fn gamestage_change(
     mut layers: Query<&mut ChunkLayer>,
     games: Query<(&MapIndex, &EntityLayerId)>,
     server_config: Res<BridgeConfig>,
-    mut gamestage: EventReader<GameStageEvent>,
+    mut gamestage: MessageReader<GameStageMessage>,
 ) {
-    for event in gamestage.read() {
-        let Ok((map_idx, layer_id)) = games.get(event.game_id) else {
+    for message in gamestage.read() {
+        let Ok((map_idx, layer_id)) = games.get(message.game_id) else {
             continue;
         };
         let Ok(mut layer) = layers.get_mut(layer_id.0) else {
             continue;
         };
 
-        match event.stage {
+        match message.stage {
             0 | 2 => { // For some reason the blocks are overwritten at the start of the game, so we need to reapply them
                 for i in 0..2 {
                     let spawn_pos =
@@ -237,15 +235,15 @@ fn gamestage_change(
 }
 
 fn fill_inventory(inv: &mut Inventory, team: u8) {
-    let armor_nbt = Some(compound! {
-        "display" => compound! {
-            "color" => match team {
+    let armor_components = vec![
+        ItemComponent::DyedColor {
+            color: match team {
                 0 => ArmorColors::Blue as i32,
                 1 => ArmorColors::Red as i32,
                 _ => 0,
-            }
+            },
         }
-    });
+    ];
     let block_type = match team {
         0 => ItemKind::BlueTerracotta,
         1 => ItemKind::RedTerracotta,
@@ -253,36 +251,33 @@ fn fill_inventory(inv: &mut Inventory, team: u8) {
     };
     inv.set_slot(
         6,
-        ItemStack::new(ItemKind::LeatherChestplate, 1, armor_nbt.clone()),
+        ItemStack::new(ItemKind::LeatherChestplate, 1).with_components(armor_components.clone()),
     );
     inv.set_slot(
         7,
-        ItemStack::new(ItemKind::LeatherLeggings, 1, armor_nbt.clone()),
+        ItemStack::new(ItemKind::LeatherLeggings, 1).with_components(armor_components.clone()),
     );
-    inv.set_slot(8, ItemStack::new(ItemKind::LeatherBoots, 1, armor_nbt));
-    inv.set_slot(36, ItemStack::new(ItemKind::IronSword, 1, None));
-    inv.set_slot(37, ItemStack::new(ItemKind::Bow, 1, None));
-    inv.set_slot(38, ItemStack::new(ItemKind::DiamondPickaxe, 1, Some(compound! {
-        "Enchantments" => List::Compound(vec! [
-            compound! {
-                "id" => "efficiency",
-                "lvl" => 2
-            }
-        ])
-    })));
-    inv.set_slot(39, ItemStack::new(block_type, 64, None));
-    inv.set_slot(40, ItemStack::new(block_type, 64, None));
-    inv.set_slot(41, ItemStack::new(ItemKind::GoldenApple, 8, None));
-    inv.set_slot(44, ItemStack::new(ItemKind::Arrow, 1, None));
+    inv.set_slot(8, ItemStack::new(ItemKind::LeatherBoots, 1).with_components(armor_components.clone()));
+    inv.set_slot(36, ItemStack::new(ItemKind::IronSword, 1));
+    inv.set_slot(37, ItemStack::new(ItemKind::Bow, 1));
+    inv.set_slot(38, ItemStack::new(ItemKind::DiamondPickaxe, 1).with_components(vec![
+        ItemComponent::Enchantments(vec![
+            (RegistryId::new(8), VarInt(2)), // Efficiency 2 - trust me
+        ]),
+    ]));
+    inv.set_slot(39, ItemStack::new(block_type, 64));
+    inv.set_slot(40, ItemStack::new(block_type, 64));
+    inv.set_slot(41, ItemStack::new(ItemKind::GoldenApple, 8));
+    inv.set_slot(44, ItemStack::new(ItemKind::Arrow, 1));
 }
 
 fn end_game(
     mut clients: Query<&mut Inventory, With<Client>>,
     games: Query<&Entities>,
-    mut end_game: EventReader<EndGameEvent>,
+    mut end_game: MessageReader<EndGameMessage>,
 ) {
-    for event in end_game.read() {
-        if let Ok(entities) = games.get(event.game_id) {
+    for message in end_game.read() {
+        if let Ok(entities) = games.get(message.game_id) {
             for entity in entities.0.iter() {
                 if let Ok(mut inv) = clients.get_mut(*entity) {
                     for slot in 0..inv.slot_count() {
@@ -297,8 +292,8 @@ fn end_game(
 fn check_goals(
     clients: Query<(Entity, &Position, &PlayerGameState), With<Client>>,
     config: Res<BridgeConfig>,
-    mut scores: EventWriter<ScoreEvent>,
-    mut deaths: EventWriter<DeathEvent>,
+    mut scores: MessageWriter<ScoreMessage>,
+    mut deaths: MessageWriter<DeathMessage>,
 ) {
     for (entity, pos, gamestate) in clients.iter() {
         if gamestate.game_id.is_some() {
@@ -308,9 +303,9 @@ fn check_goals(
                     && (goal[4]..=goal[5]).contains(&(pos.0.z as i32))
                 {
                     if gamestate.team == i as u8 {
-                        deaths.send(DeathEvent(entity, true));
+                        deaths.write(DeathMessage(entity, true));
                     } else {
-                        scores.send(ScoreEvent(entity));
+                        scores.write(ScoreMessage(entity));
                     }
                 }
             }
@@ -334,21 +329,21 @@ fn update_bow_cooldown(
 
         let tick_diff = bow_status.cooldown - tick;
         if tick_diff % 5 == 0 {
-            client.write_packet(&ExperienceBarUpdateS2c {
+            client.write_packet(&SetExperienceS2c {
                 bar: tick_diff as f32 / 60.0,
                 level: VarInt(0),
                 total_xp: VarInt(0),
             });
         } else if tick_diff == 59 {
-            client.write_packet(&ExperienceBarUpdateS2c {
+            client.write_packet(&SetExperienceS2c {
                 bar: 1.0,
                 level: VarInt(0),
                 total_xp: VarInt(0),
             });
         }
         if bow_status.cooldown < tick {
-            inv.set_slot(bow_status.slot, ItemStack::new(ItemKind::Arrow, 1, None));
-            client.write_packet(&ExperienceBarUpdateS2c {
+            inv.set_slot(bow_status.slot, ItemStack::new(ItemKind::Arrow, 1));
+            client.write_packet(&SetExperienceS2c {
                 bar: 0.0,
                 level: VarInt(0),
                 total_xp: VarInt(0),
@@ -377,17 +372,17 @@ struct CombatQuery {
 fn handle_combat_events(
     server: Res<Server>,
     mut clients: Query<CombatQuery>,
-    mut sprinting: EventReader<SprintEvent>,
-    mut interact_entity: EventReader<InteractEntityEvent>,
-    mut deaths: EventWriter<DeathEvent>,
+    mut sprinting: MessageReader<SprintMessage>,
+    mut interact_entity: MessageReader<InteractEntityMessage>,
+    mut deaths: MessageWriter<DeathMessage>,
 ) {
-    for &SprintEvent { client, state } in sprinting.read() {
+    for &SprintMessage { client, state } in sprinting.read() {
         if let Ok(mut client) = clients.get_mut(client) {
             client.state.has_bonus_knockback = state == SprintState::Start;
         }
     }
 
-    for &InteractEntityEvent {
+    for &InteractEntityMessage {
         client: attacker_client,
         entity: victim_client,
         interact: interaction,
@@ -448,12 +443,12 @@ fn handle_combat_events(
 fn handle_collision_events(
     mut clients: Query<CombatQuery>,
     arrows: Query<(&Velocity, &ProjectileOwner)>,
-    mut collisions: EventReader<ProjectileCollisionEvent>,
-    mut deaths: EventWriter<DeathEvent>,
+    mut collisions: MessageReader<ProjectileCollisionMessage>,
+    mut deaths: MessageWriter<DeathMessage>,
 ) {
-    for event in collisions.read() {
-        if let Ok((vel, owner)) = arrows.get(event.arrow)
-            && let Ok([mut attacker, mut victim]) = clients.get_many_mut([owner.0, event.player])
+    for message in collisions.read() {
+        if let Ok((vel, owner)) = arrows.get(message.arrow)
+            && let Ok([mut attacker, mut victim]) = clients.get_many_mut([owner.0, message.player])
         {
             if attacker.gamestate.team == victim.gamestate.team {
                 continue;
@@ -461,7 +456,7 @@ fn handle_collision_events(
 
             // TODO: Make the damage accurate
             let dmg = calc_dmg(
-                0.13 * vel.0.length(),
+                (0.13 * vel.0.length()) as f32,
                 victim.inv.slot(5).item,
                 victim.inv.slot(6).item,
                 victim.inv.slot(7).item,
@@ -472,7 +467,7 @@ fn handle_collision_events(
                 &mut attacker,
                 &mut victim,
                 dmg,
-                vel.0.normalize().with_y(0.0) * 0.6 * 20.0, // TODO: Make the knockback accurate
+                vel.0.normalize().with_y(0.0).as_vec3() * 0.6 * 20.0, // TODO: Make the knockback accurate
                 &mut deaths,
             );
             attacker.client.play_sound(
@@ -504,12 +499,12 @@ fn handle_death(
     >,
     usernames: Query<&Username, With<Client>>,
     games: Query<&MapIndex>,
-    mut deaths: EventReader<DeathEvent>,
-    mut broadcasts: EventWriter<MessageEvent>,
+    mut deaths: MessageReader<DeathMessage>,
+    mut broadcasts: MessageWriter<MessageMessage>,
     config: Res<BridgeConfig>,
 ) {
     let mut killers = Vec::new();
-    for DeathEvent(entity, show) in deaths.read() {
+    for DeathMessage(entity, show) in deaths.read() {
         if let Ok((
             mut pos,
             mut look,
@@ -543,7 +538,7 @@ fn handle_death(
             }
             fill_inventory(&mut inventory, gamestate.team);
             if *show {
-                broadcasts.send(MessageEvent {
+                broadcasts.write(MessageMessage {
                     game: game_id,
                     msg: Text::from(username.0.clone()).color(if gamestate.team == 0 {
                         Color::BLUE
@@ -578,13 +573,13 @@ fn handle_death(
 fn handle_score(
     clients: Query<(&Username, &PlayerGameState), With<Client>>,
     mut games: Query<(&Entities, &mut GameStage, &mut GameTime, &mut GameData)>,
-    mut scores: EventReader<ScoreEvent>,
-    mut deaths: EventWriter<DeathEvent>,
-    mut broadcasts: EventWriter<MessageEvent>,
-    mut gamestage: EventWriter<GameStageEvent>,
-    mut end_game: EventWriter<EndGameEvent>,
+    mut scores: MessageReader<ScoreMessage>,
+    mut deaths: MessageWriter<DeathMessage>,
+    mut broadcasts: MessageWriter<MessageMessage>,
+    mut gamestage: MessageWriter<GameStageMessage>,
+    mut end_game: MessageWriter<EndGameMessage>,
 ) {
-    for ScoreEvent(player) in scores.read() {
+    for ScoreMessage(player) in scores.read() {
         let Ok((username, gamestate)) = clients.get(*player) else {
             continue;
         };
@@ -601,9 +596,9 @@ fn handle_score(
         }
         data.0.insert(team, DataValue::Int(score));
         for entity in entities.0.iter() {
-            deaths.send(DeathEvent(*entity, false));
+            deaths.write(DeathMessage(*entity, false));
         }
-        broadcasts.send(MessageEvent {
+        broadcasts.write(MessageMessage {
             game,
             msg: Text::from(username.0.clone()).color(
                 if team == 0 {
@@ -616,14 +611,14 @@ fn handle_score(
                 + Text::from("/5)").color(Color::GRAY),
         });
         if score >= 5 {
-            end_game.send(EndGameEvent {
+            end_game.write(EndGameMessage {
                 game_id: game,
                 loser: if team == 0 { 1 } else { 0 },
             });
         } else {
             time.0 = SystemTime::now(); // TODO: Replace with a better solution because the game time is not supposed to keep track of the entire game duration
             stage.0 = 0;
-            gamestage.send(GameStageEvent {
+            gamestage.write(GameStageMessage {
                 game_id: game,
                 stage: 0,
             });
@@ -654,9 +649,9 @@ fn update_scoreboard(
 fn game_broadcast(
     mut clients: Query<&mut Client>,
     games: Query<&Entities>,
-    mut broadcasts: EventReader<MessageEvent>,
+    mut broadcasts: MessageReader<MessageMessage>,
 ) {
-    for MessageEvent { game, msg } in broadcasts.read() {
+    for MessageMessage { game, msg } in broadcasts.read() {
         if let Ok(entities) = games.get(*game) {
             for entity in entities.0.iter() {
                 if let Ok(mut client) = clients.get_mut(*entity) {
@@ -684,7 +679,7 @@ fn damage_player(
     victim: &mut CombatQueryItem,
     damage: f32,
     velocity: Vec3,
-    deaths: &mut EventWriter<DeathEvent>,
+    deaths: &mut MessageWriter<DeathMessage>,
 ) {
     let old_vel = Vec3::new(
         (victim.pos.0.x - victim.old_pos.get().x) as f32,
@@ -703,7 +698,7 @@ fn damage_player(
         1.0,
         1.0,
     );
-    victim.client.write_packet(&DamageTiltS2c {
+    victim.client.write_packet(&HurtAnimationS2c {
         entity_id: VarInt(0),
         yaw: 0.0,
     });
@@ -714,7 +709,7 @@ fn damage_player(
         1.0,
         1.0,
     );
-    attacker.client.write_packet(&DamageTiltS2c {
+    attacker.client.write_packet(&HurtAnimationS2c {
         entity_id: VarInt(victim.id.get()),
         yaw: 0.0,
     });
@@ -727,7 +722,7 @@ fn damage_player(
         victim.absorption.0 -= damage.min(victim.absorption.0);
     }
     if victim.health.0 <= new_damage {
-        deaths.send(DeathEvent(victim.entity, true));
+        deaths.write(DeathMessage(victim.entity, true));
     } else {
         victim.health.0 -= new_damage;
     }

@@ -5,15 +5,15 @@ pub mod map;
 pub mod oob;
 
 use bevy_ecs::query::QueryData;
-use serde::{Deserialize, de::DeserializeOwned};
-use std::path::PathBuf;
-use std::{collections::HashMap, marker::PhantomData, time::SystemTime};
-use valence::{
+use chunkedge::{
     entity::living::Health,
-    message::ChatMessageEvent,
+    message::ChatReceivedMessage,
     prelude::*,
     protocol::{Sound, sound::SoundCategory},
 };
+use serde::{Deserialize, de::DeserializeOwned};
+use std::path::PathBuf;
+use std::{collections::HashMap, marker::PhantomData, time::SystemTime};
 
 use super::config::{ConfigLoaderPlugin, NetworkConfig, WorldValue};
 
@@ -52,17 +52,17 @@ pub struct CombatState {
     pub last_attacker: Option<Entity>,
 }
 
-#[derive(Event)]
-pub struct StartGameEvent(pub Entity);
+#[derive(Message)]
+pub struct StartGameMessage(pub Entity);
 
-#[derive(Event)]
-pub struct EndGameEvent {
+#[derive(Message)]
+pub struct EndGameMessage {
     pub game_id: Entity,
     pub loser: u8,
 }
 
-#[derive(Event)]
-pub struct GameStageEvent {
+#[derive(Message)]
+pub struct GameStageMessage {
     pub game_id: Entity,
     pub stage: u8,
 }
@@ -113,9 +113,9 @@ impl<T: Resource + DeserializeOwned + DuelsConfig + Sync + Send + 'static> Plugi
             default_gamemode: self.default_gamemode,
         })
         .insert_resource(ServerGlobals { queue: Vec::new() })
-        .add_event::<StartGameEvent>()
-        .add_event::<EndGameEvent>()
-        .add_event::<GameStageEvent>()
+        .add_message::<StartGameMessage>()
+        .add_message::<EndGameMessage>()
+        .add_message::<GameStageMessage>()
         .add_systems(
             Update,
             (
@@ -144,7 +144,7 @@ impl<T: Resource + DeserializeOwned + DuelsConfig + Sync + Send + 'static> Plugi
 pub fn handle_disconnect(
     disconncted: Query<(Entity, &PlayerGameState), Added<Despawned>>,
     mut clients: Query<(&mut Client, &PlayerGameState)>,
-    mut end_game: EventWriter<EndGameEvent>,
+    mut end_game: MessageWriter<EndGameMessage>,
     mut globals: ResMut<ServerGlobals>,
 ) {
     for (entity, dc_gamestate) in disconncted.iter() {
@@ -157,7 +157,7 @@ pub fn handle_disconnect(
                     client.clear_title();
                 }
             }
-            end_game.send(EndGameEvent {
+            end_game.write(EndGameMessage {
                 game_id: dc_gamestate.game_id.unwrap(),
                 loser: dc_gamestate.team,
             });
@@ -168,8 +168,8 @@ pub fn handle_disconnect(
 pub fn start_game(
     mut clients: Query<&mut CombatState, With<Client>>,
     games: Query<&Entities>,
-    mut start_game: EventReader<StartGameEvent>,
-    mut gamestage: EventWriter<GameStageEvent>,
+    mut start_game: MessageReader<StartGameMessage>,
+    mut gamestage: MessageWriter<GameStageMessage>,
 ) {
     for event in start_game.read() {
         if let Ok(entities) = games.get(event.0) {
@@ -179,7 +179,7 @@ pub fn start_game(
                 }
             }
         }
-        gamestage.send(GameStageEvent {
+        gamestage.write(GameStageMessage {
             game_id: event.0,
             stage: 0,
         });
@@ -199,7 +199,7 @@ pub struct GameQuery {
 pub fn gameloop<T: Resource + DuelsConfig>(
     mut clients: Query<GameQuery>,
     mut games: Query<(Entity, &Entities, &MapIndex, &mut GameStage, &GameTime)>,
-    mut gamestage: EventWriter<GameStageEvent>,
+    mut gamestage: MessageWriter<GameStageMessage>,
     config: Res<T>,
 ) {
     for (game_id, entities, map, mut stage, time) in games.iter_mut() {
@@ -216,7 +216,7 @@ pub fn gameloop<T: Resource + DuelsConfig>(
         }
         if (stage.0 < 5 && time.0.elapsed().unwrap().as_secs() >= stage.0 as u64) || stage.0 == 0 {
             stage.0 += 1;
-            gamestage.send(GameStageEvent {
+            gamestage.write(GameStageMessage {
                 game_id,
                 stage: stage.0,
             });
@@ -227,7 +227,7 @@ pub fn gameloop<T: Resource + DuelsConfig>(
 pub fn gamestage_change(
     mut clients: Query<(&mut Client, &Position)>,
     games: Query<&Entities>,
-    mut gamestage: EventReader<GameStageEvent>,
+    mut gamestage: MessageReader<GameStageMessage>,
 ) {
     for event in gamestage.read() {
         if let Ok(entities) = games.get(event.game_id) {
@@ -267,7 +267,7 @@ pub fn gamestage_change(
 pub fn chat_message(
     players: Query<(&PlayerGameState, &Username)>,
     mut clients: Query<(&mut Client, &PlayerGameState)>,
-    mut events: EventReader<ChatMessageEvent>,
+    mut events: MessageReader<ChatReceivedMessage>,
 ) {
     for event in events.read() {
         let Ok((sender_gamestate, sender_name)) = players.get(event.client) else {

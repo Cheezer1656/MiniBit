@@ -1,4 +1,5 @@
 use ::serde::Deserialize;
+use chunkedge::{CompressionThreshold, ServerSettings, network::NetworkSettings, prelude::*};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 use std::{
@@ -8,7 +9,6 @@ use std::{
     str::FromStr,
     sync::Arc,
 };
-use valence::{CompressionThreshold, ServerSettings, network::NetworkSettings, prelude::*};
 
 #[derive(Deserialize, Serialize, Clone)]
 #[serde(default)]

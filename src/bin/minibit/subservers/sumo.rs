@@ -3,13 +3,13 @@
 use std::marker::PhantomData;
 use bevy_ecs::query::QueryData;
 use minibit_lib::duels::{CombatState, DefaultDuelsConfig, DuelsPlugin, PlayerGameState};
-use valence::entity::{EntityId, EntityStatuses};
-use valence::math::Vec3Swizzles;
-use valence::prelude::*;
-use valence::protocol::packets::play::DamageTiltS2c;
-use valence::protocol::sound::SoundCategory;
-use valence::protocol::{Sound, WritePacket};
-use valence::protocol::VarInt;
+use chunkedge::entity::{EntityId, EntityStatuses};
+use chunkedge::math::Vec3Swizzles;
+use chunkedge::prelude::*;
+use chunkedge::protocol::packets::play::HurtAnimationS2c;
+use chunkedge::protocol::sound::SoundCategory;
+use chunkedge::protocol::{Sound, WritePacket};
+use chunkedge::protocol::VarInt;
 use minibit_lib::duels::oob::{OobMode, OobPlugin};
 use crate::ServerConfig;
 
@@ -45,16 +45,16 @@ struct CombatQuery {
 fn handle_combat_events(
     server: Res<Server>,
     mut clients: Query<CombatQuery>,
-    mut sprinting: EventReader<SprintEvent>,
-    mut interact_entity: EventReader<InteractEntityEvent>,
+    mut sprinting: MessageReader<SprintMessage>,
+    mut interact_entity: MessageReader<InteractEntityMessage>,
 ) {
-    for &SprintEvent { client, state } in sprinting.read() {
+    for &SprintMessage { client, state } in sprinting.read() {
         if let Ok(mut client) = clients.get_mut(client) {
             client.state.has_bonus_knockback = state == SprintState::Start;
         }
     }
 
-    for &InteractEntityEvent {
+    for &InteractEntityMessage {
         client: attacker_client,
         entity: victim_client,
         interact: interaction,
@@ -78,7 +78,7 @@ fn handle_combat_events(
         let victim_pos = victim.pos.0.xz();
         let attacker_pos = attacker.pos.0.xz();
 
-        let dir = (victim_pos - attacker_pos).normalize().as_vec2();
+        let dir = (victim_pos - attacker_pos).normalize();
 
         let knockback_xz = if attacker.state.has_bonus_knockback {
             18.0
@@ -93,7 +93,7 @@ fn handle_combat_events(
 
         victim
             .client
-            .set_velocity([dir.x * knockback_xz, knockback_y, dir.y * knockback_xz]);
+            .set_velocity(DVec3::new(dir.x * knockback_xz, knockback_y, dir.y * knockback_xz));
 
         attacker.state.has_bonus_knockback = false;
 
@@ -104,7 +104,7 @@ fn handle_combat_events(
             1.0,
             1.0,
         );
-        victim.client.write_packet(&DamageTiltS2c {
+        victim.client.write_packet(&HurtAnimationS2c {
             entity_id: VarInt(0),
             yaw: 0.0,
         });
@@ -115,7 +115,7 @@ fn handle_combat_events(
             1.0,
             1.0,
         );
-        attacker.client.write_packet(&DamageTiltS2c {
+        attacker.client.write_packet(&HurtAnimationS2c {
             entity_id: VarInt(victim.id.get()),
             yaw: 0.0,
         });

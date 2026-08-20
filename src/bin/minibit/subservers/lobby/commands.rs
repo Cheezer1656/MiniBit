@@ -1,9 +1,8 @@
-use valence::{
-    command::{handler::CommandResultEvent, AddCommand},
+use chunkedge::{
+    command::{handler::CommandResultMessage, AddCommand},
     command_macros::Command,
     prelude::*,
 };
-
 use crate::lobby::LobbyConfig;
 
 #[derive(Command, Debug, Clone)]
@@ -21,12 +20,12 @@ impl Plugin for CommandPlugin {
 }
 
 fn handle_stuck_command(
-    mut events: EventReader<CommandResultEvent<StuckCommand>>,
+    mut messages: MessageReader<CommandResultMessage<StuckCommand>>,
     mut clients: Query<(Entity, &mut Position, &mut Look, &mut HeadYaw), With<Client>>,
     config: Res<LobbyConfig>,
 ) {
-    for event in events.read() {
-        if let Ok((_, mut pos, mut look, mut head_yaw)) = clients.get_mut(event.executor) {
+    for message in messages.read() {
+        if let Ok((_, mut pos, mut look, mut head_yaw)) = clients.get_mut(message.executor) {
             pos.set(config.world.spawns[0].pos);
             look.yaw = config.world.spawns[0].rot[0];
             look.pitch = config.world.spawns[0].rot[1];

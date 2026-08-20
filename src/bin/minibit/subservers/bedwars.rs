@@ -12,30 +12,30 @@ use minibit_lib::player::*;
 use minibit_lib::projectiles::*;
 use minibit_lib::world::*;
 use serde::Deserialize;
-use valence::entity::item::ItemEntityBundle;
-use valence::entity::item::Stack;
-use valence::entity::living::Absorption;
-use valence::entity::living::Health;
-use valence::entity::Velocity;
-use valence::entity::{EntityId, EntityStatuses};
-use valence::equipment::EquipmentInventorySync;
-use valence::inventory::HeldItem;
-use valence::math::IVec3;
-use valence::math::Vec3Swizzles;
-use valence::nbt::compound;
-use valence::prelude::*;
-use valence::protocol::packets::play::DamageTiltS2c;
-use valence::protocol::sound::SoundCategory;
-use valence::protocol::Sound;
-use valence::protocol::VarInt;
-use valence::protocol::WritePacket;
-use minibit_lib::death::{DeathEvent, DeathPlugin, DeathSet};
+use chunkedge::entity::item::{ItemEntity};
+use chunkedge::entity::item::Stack;
+use chunkedge::entity::living::Absorption;
+use chunkedge::entity::living::Health;
+use chunkedge::entity::Velocity;
+use chunkedge::entity::{EntityId, EntityStatuses};
+use chunkedge::equipment::EquipmentInventorySync;
+use chunkedge::inventory::HeldItem;
+use chunkedge::math::IVec3;
+use chunkedge::math::Vec3Swizzles;
+use chunkedge::prelude::*;
+use chunkedge::protocol::packets::play::HurtAnimationS2c;
+use chunkedge::protocol::sound::SoundCategory;
+use chunkedge::protocol::Sound;
+use chunkedge::protocol::VarInt;
+use chunkedge::protocol::WritePacket;
+use chunkedge::item::ItemComponent;
+use minibit_lib::death::{DeathMessage, DeathPlugin, DeathSet};
 use minibit_lib::duels::oob::{OobMode, OobPlugin};
 use minibit_lib::food::golden_apple::GoldenApplePlugin;
 use crate::ServerConfig;
 
-#[derive(Event)]
-struct MessageEvent {
+#[derive(Message)]
+struct MessageMessage {
     game: Entity,
     msg: Text,
 }
@@ -95,7 +95,7 @@ pub fn main(config: ServerConfig) {
                 bounds_y: 0.0..,
             },
         ))
-        .add_event::<MessageEvent>()
+        .add_message::<MessageMessage>()
         .add_systems(Startup, setup)
         .add_systems(EventLoopUpdate, handle_combat_events)
         .add_systems(
@@ -132,10 +132,10 @@ fn init_clients(clients: Query<Entity, Added<Client>>, mut commands: Commands) {
 fn start_game(
     mut clients: Query<(&mut GameMode, &mut Inventory, &PlayerGameState), With<Client>>,
     mut games: Query<(&Entities, &mut GameData)>,
-    mut start_game: EventReader<StartGameEvent>,
+    mut start_game: MessageReader<StartGameMessage>,
 ) {
-    for event in start_game.read() {
-        if let Ok((entities, mut data)) = games.get_mut(event.0) {
+    for message in start_game.read() {
+        if let Ok((entities, mut data)) = games.get_mut(message.0) {
             data.0.insert(0, DataValue::Int(0));
             data.0.insert(1, DataValue::Int(0));
 
@@ -150,38 +150,39 @@ fn start_game(
 }
 
 fn fill_inventory(inv: &mut Inventory, team: u8) {
-    let armor_nbt = Some(compound! {
-        "display" => compound! {
-            "color" => match team {
+    let armor_components = vec![
+        ItemComponent::DyedColor {
+            color: match team {
                 0 => ArmorColors::Blue as i32,
                 1 => ArmorColors::Red as i32,
                 _ => 0,
-            }
+            },
         }
-    });
+    ];
+
     inv.set_slot(
         5,
-        ItemStack::new(ItemKind::LeatherHelmet, 1, armor_nbt.clone()),
+        ItemStack::new(ItemKind::LeatherHelmet, 1).with_components(armor_components.clone()),
     );
     inv.set_slot(
         6,
-        ItemStack::new(ItemKind::LeatherChestplate, 1, armor_nbt.clone()),
+        ItemStack::new(ItemKind::LeatherChestplate, 1).with_components(armor_components.clone()),
     );
     inv.set_slot(
         7,
-        ItemStack::new(ItemKind::LeatherLeggings, 1, armor_nbt.clone()),
+        ItemStack::new(ItemKind::LeatherLeggings, 1).with_components(armor_components.clone()),
     );
-    inv.set_slot(8, ItemStack::new(ItemKind::LeatherBoots, 1, armor_nbt));
-    inv.set_slot(36, ItemStack::new(ItemKind::WoodenSword, 1, None));
+    inv.set_slot(8, ItemStack::new(ItemKind::LeatherBoots, 1).with_components(armor_components.clone()));
+    inv.set_slot(36, ItemStack::new(ItemKind::WoodenSword, 1));
 }
 
 fn end_game(
     mut clients: Query<(&mut GameMode, &mut Inventory), With<Client>>,
     games: Query<&Entities>,
-    mut end_game: EventReader<EndGameEvent>,
+    mut end_game: MessageReader<EndGameMessage>,
 ) {
-    for event in end_game.read() {
-        if let Ok(entities) = games.get(event.game_id) {
+    for message in end_game.read() {
+        if let Ok(entities) = games.get(message.game_id) {
             for entity in entities.0.iter() {
                 if let Ok((mut gamemode, mut inv)) = clients.get_mut(*entity) {
                     *gamemode = GameMode::Adventure;
@@ -205,12 +206,12 @@ fn gen_iron(
     }
     for layer_id in games.iter() {
         for loc in &config.generator_locations {
-            commands.spawn(ItemEntityBundle {
-                item_stack: Stack(ItemStack::new(ItemKind::IronIngot, 1, None)),
-                position: Position(DVec3::from_array(*loc) + DVec3::new(0.0, 2.0, 0.0)),
-                layer: *layer_id,
-                ..Default::default()
-            });
+            commands.spawn((
+                ItemEntity,
+                Stack(ItemStack::new(ItemKind::IronIngot, 1)),
+                Position(DVec3::from_array(*loc) + DVec3::new(0.0, 2.0, 0.0)),
+                *layer_id,
+            ));
         }
     }
 }
@@ -235,17 +236,17 @@ struct CombatQuery {
 fn handle_combat_events(
     server: Res<Server>,
     mut clients: Query<CombatQuery>,
-    mut sprinting: EventReader<SprintEvent>,
-    mut interact_entity: EventReader<InteractEntityEvent>,
-    mut deaths: EventWriter<DeathEvent>,
+    mut sprinting: MessageReader<SprintMessage>,
+    mut interact_entity: MessageReader<InteractEntityMessage>,
+    mut deaths: MessageWriter<DeathMessage>,
 ) {
-    for &SprintEvent { client, state } in sprinting.read() {
+    for &SprintMessage { client, state } in sprinting.read() {
         if let Ok(mut client) = clients.get_mut(client) {
             client.state.has_bonus_knockback = state == SprintState::Start;
         }
     }
 
-    for &InteractEntityEvent {
+    for &InteractEntityMessage {
         client: attacker_client,
         entity: victim_client,
         interact: interaction,
@@ -270,7 +271,7 @@ fn handle_combat_events(
         let victim_pos = victim.pos.0.xz();
         let attacker_pos = attacker.pos.0.xz();
 
-        let dir = (victim_pos - attacker_pos).normalize().as_vec2();
+        let dir = (victim_pos - attacker_pos).normalize();
 
         let knockback_xz = if attacker.state.has_bonus_knockback {
             18.0
@@ -295,7 +296,7 @@ fn handle_combat_events(
             &mut attacker,
             &mut victim,
             dmg,
-            Vec3::new(dir.x * knockback_xz, knockback_y, dir.y * knockback_xz),
+            DVec3::new(dir.x * knockback_xz, knockback_y, dir.y * knockback_xz),
             &mut deaths,
         );
 
@@ -306,12 +307,12 @@ fn handle_combat_events(
 fn handle_collision_events(
     mut clients: Query<CombatQuery>,
     arrows: Query<(&Velocity, &ProjectileOwner)>,
-    mut collisions: EventReader<ProjectileCollisionEvent>,
-    mut deaths: EventWriter<DeathEvent>,
+    mut collisions: MessageReader<ProjectileCollisionMessage>,
+    mut deaths: MessageWriter<DeathMessage>,
 ) {
-    for event in collisions.read() {
-        if let Ok((vel, owner)) = arrows.get(event.arrow)
-            && let Ok([mut attacker, mut victim]) = clients.get_many_mut([owner.0, event.player])
+    for message in collisions.read() {
+        if let Ok((vel, owner)) = arrows.get(message.arrow)
+            && let Ok([mut attacker, mut victim]) = clients.get_many_mut([owner.0, message.player])
         {
             if attacker.gamestate.team == victim.gamestate.team {
                 continue;
@@ -319,7 +320,7 @@ fn handle_collision_events(
 
             // TODO: Make the damage accurate
             let dmg = calc_dmg(
-                0.13 * vel.0.length(),
+                (0.13 * vel.0.length()) as f32,
                 victim.inv.slot(5).item,
                 victim.inv.slot(6).item,
                 victim.inv.slot(7).item,
@@ -363,11 +364,11 @@ fn handle_death(
     >,
     usernames: Query<&Username, With<Client>>,
     games: Query<&MapIndex>,
-    mut deaths: EventReader<DeathEvent>,
-    mut broadcasts: EventWriter<MessageEvent>,
+    mut deaths: MessageReader<DeathMessage>,
+    mut broadcasts: MessageWriter<MessageMessage>,
     config: Res<BedwarsConfig>,
 ) {
-    for DeathEvent(entity, show) in deaths.read() {
+    for DeathMessage(entity, show) in deaths.read() {
         if let Ok((
             mut pos,
             mut look,
@@ -401,7 +402,7 @@ fn handle_death(
             }
             fill_inventory(&mut inventory, gamestate.team);
             if *show {
-                broadcasts.send(MessageEvent {
+                broadcasts.write(MessageMessage {
                     game: game_id,
                     msg: Text::from(username.0.clone()).color(if gamestate.team == 0 {
                         Color::BLUE
@@ -433,7 +434,7 @@ fn handle_death(
 fn check_for_winners(
     clients: Query<(&GameMode, &PlayerGameState)>,
     games: Query<(Entity, &Entities)>,
-    mut end_game: EventWriter<EndGameEvent>,
+    mut end_game: MessageWriter<EndGameMessage>,
 ) {
     let games = games.iter();
     for (game_id, entities) in games {
@@ -446,12 +447,12 @@ fn check_for_winners(
             }
         }
         if teams_alive.len() == 1 {
-            end_game.send(EndGameEvent {
+            end_game.write(EndGameMessage {
                 game_id,
                 loser: if teams_alive.contains(&0) { 1 } else { 0 },
             });
         } else if teams_alive.is_empty() {
-            end_game.send(EndGameEvent {
+            end_game.write(EndGameMessage {
                 game_id,
                 loser: 2,
             });
@@ -463,10 +464,10 @@ fn handle_bed_break(
     mut clients: Query<(&mut Client, &PlayerGameState)>,
     mut players: Query<(&mut BedwarsState, &PlayerGameState)>,
     games: Query<&Entities>,
-    mut break_events: EventReader<BlockBreakEvent>,
-    mut broadcasts: EventWriter<MessageEvent>,
+    mut break_messages: MessageReader<BlockBreakMessage>,
+    mut broadcasts: MessageWriter<MessageMessage>,
 ) {
-    for &BlockBreakEvent { client, position: _, block } in break_events.read() {
+    for &BlockBreakMessage { client, position: _, block } in break_messages.read() {
         if let Ok((mut client, gamestate)) = clients.get_mut(client) {
             let team = match block {
                 BlockKind::BlueBed => Some(0),
@@ -488,7 +489,7 @@ fn handle_bed_break(
                     }
                 }
                 client.send_chat_message("You destroyed a bed!");
-                broadcasts.send(MessageEvent {
+                broadcasts.write(MessageMessage {
                     game: game_id,
                     msg: Text::from(match team {
                         0 => "Blue",
@@ -508,9 +509,9 @@ fn handle_bed_break(
 fn game_broadcast(
     mut clients: Query<&mut Client>,
     games: Query<&Entities>,
-    mut broadcasts: EventReader<MessageEvent>,
+    mut broadcasts: MessageReader<MessageMessage>,
 ) {
-    for MessageEvent { game, msg } in broadcasts.read() {
+    for MessageMessage { game, msg } in broadcasts.read() {
         if let Ok(entities) = games.get(*game) {
             for entity in entities.0.iter() {
                 if let Ok(mut client) = clients.get_mut(*entity) {
@@ -527,13 +528,13 @@ fn damage_player(
     attacker: &mut CombatQueryItem,
     victim: &mut CombatQueryItem,
     damage: f32,
-    velocity: Vec3,
-    deaths: &mut EventWriter<DeathEvent>,
+    velocity: DVec3,
+    deaths: &mut MessageWriter<DeathMessage>,
 ) {
-    let old_vel = Vec3::new(
-        (victim.pos.0.x - victim.old_pos.get().x) as f32,
-        (victim.pos.0.y - victim.old_pos.get().y) as f32,
-        (victim.pos.0.z - victim.old_pos.get().z) as f32,
+    let old_vel = DVec3::new(
+        victim.pos.0.x - victim.old_pos.get().x,
+        victim.pos.0.y - victim.old_pos.get().y,
+        victim.pos.0.z - victim.old_pos.get().z,
     );
 
     victim.client.set_velocity(old_vel + velocity);
@@ -547,7 +548,7 @@ fn damage_player(
         1.0,
         1.0,
     );
-    victim.client.write_packet(&DamageTiltS2c {
+    victim.client.write_packet(&HurtAnimationS2c {
         entity_id: VarInt(0),
         yaw: 0.0,
     });
@@ -558,7 +559,7 @@ fn damage_player(
         1.0,
         1.0,
     );
-    attacker.client.write_packet(&DamageTiltS2c {
+    attacker.client.write_packet(&HurtAnimationS2c {
         entity_id: VarInt(victim.id.get()),
         yaw: 0.0,
     });
@@ -571,7 +572,7 @@ fn damage_player(
         victim.absorption.0 -= damage.min(victim.absorption.0);
     }
     if victim.health.0 <= new_damage {
-        deaths.send(DeathEvent(victim.entity, true));
+        deaths.write(DeathMessage(victim.entity, true));
     } else {
         victim.health.0 -= new_damage;
     }

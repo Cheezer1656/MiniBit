@@ -1,7 +1,7 @@
-use crate::death::DeathEvent;
-use crate::duels::{EndGameEvent, PlayerGameState};
+use crate::death::DeathMessage;
+use crate::duels::{EndGameMessage, PlayerGameState};
+use chunkedge::prelude::*;
 use std::ops::RangeBounds;
-use valence::prelude::*;
 
 pub enum OobMode {
     DeathEvent,
@@ -42,21 +42,21 @@ where
 
 fn handle_oob_clients_death<R>(
     positions: Query<(Entity, &Position, &PlayerGameState), With<Client>>,
-    mut deaths: EventWriter<DeathEvent>,
+    mut deaths: MessageWriter<DeathMessage>,
     oob: Res<OobResource<R>>,
 ) where
     R: RangeBounds<f64> + Send + Sync + Clone + 'static,
 {
     for (entity, pos, gamestate) in positions.iter() {
         if !oob.bounds_y.contains(&pos.y) && gamestate.game_id.is_some() {
-            deaths.send(DeathEvent(entity, true));
+            deaths.write(DeathMessage(entity, true));
         }
     }
 }
 
 fn handle_oob_clients_end_game<R>(
     positions: Query<(&Position, &PlayerGameState), With<Client>>,
-    mut end_game: EventWriter<EndGameEvent>,
+    mut end_game: MessageWriter<EndGameMessage>,
     oob: Res<OobResource<R>>,
 ) where
     R: RangeBounds<f64> + Send + Sync + Clone + 'static,
@@ -65,7 +65,7 @@ fn handle_oob_clients_end_game<R>(
         if !oob.bounds_y.contains(&pos.y)
             && let Some(game_id) = gamestate.game_id
         {
-            end_game.send(EndGameEvent {
+            end_game.write(EndGameMessage {
                 game_id,
                 loser: gamestate.team,
             });
