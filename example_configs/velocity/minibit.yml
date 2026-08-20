@@ -1,11 +1,6 @@
 forwarding:
   mode: 3
 
-bedwars:
-  enabled: true
-  path: bedwars
-  network:
-    port: 25566
 bowfight:
   enabled: true
   path: bowfight

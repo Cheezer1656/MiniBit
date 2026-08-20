@@ -78,7 +78,6 @@ struct Config {
     #[clap(skip)] forwarding: ForwardingConfig,
 
     #[clap(skip)] lobby: ServerConfig,
-    #[clap(skip)] bedwars: ServerConfig,
     #[clap(skip)] bowfight: ServerConfig,
     #[clap(skip)] boxing: ServerConfig,
     #[clap(skip)] bridge: ServerConfig,
@@ -121,7 +120,6 @@ fn main() {
     #[allow(clippy::type_complexity)]
     let subservers: Vec<(&str, fn(ServerConfig), ServerConfig)> = vec![
         subserver!(lobby, config),
-        subserver!(bedwars, config),
         subserver!(bowfight, config),
         subserver!(boxing, config),
         subserver!(bridge, config),
