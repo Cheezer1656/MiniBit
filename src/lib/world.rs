@@ -1,8 +1,8 @@
 #![allow(dead_code)]
 
+use chunkedge::interact_block::InteractBlockMessage;
 use chunkedge::inventory::player_inventory::PlayerInventory;
 use chunkedge::{inventory::HeldItem, math::IVec3, prelude::*};
-use chunkedge::interact_block::InteractBlockMessage;
 
 #[derive(Message)]
 pub struct BlockBreakMessage {

@@ -1,7 +1,7 @@
 use crate::death::DeathMessage;
 use crate::duels::{EndGameMessage, PlayerGameState};
-use std::ops::RangeBounds;
 use chunkedge::prelude::*;
+use std::ops::RangeBounds;
 
 pub enum OobMode {
     DeathEvent,

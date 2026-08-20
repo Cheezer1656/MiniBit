@@ -2,23 +2,20 @@
 #![allow(clippy::type_complexity)]
 
 use bevy_ecs::query::QueryData;
-use parry3d::{
-    math::Vector,
-    na::{self, Isometry3},
-    query::{ShapeCastOptions, cast_shapes},
-    shape::Cuboid,
-};
 use chunkedge::inventory::player_inventory::PlayerInventory;
 use chunkedge::{
-    entity::{
-        Velocity,
-        arrow::ArrowEntity,
-    },
+    entity::{Velocity, arrow::ArrowEntity},
     event_loop::PacketMessage,
     interact_item::InteractItemMessage,
     inventory::{HeldItem, PlayerAction},
     prelude::*,
     protocol::{Sound, packets::play::PlayerActionC2s, sound::SoundCategory},
+};
+use parry3d::{
+    math::Vector,
+    na::{self, Isometry3},
+    query::{ShapeCastOptions, cast_shapes},
+    shape::Cuboid,
 };
 
 #[derive(Component)]

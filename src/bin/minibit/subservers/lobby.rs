@@ -424,7 +424,7 @@ fn manage_parkour(
     for (entity, mut client, status, pos) in query.iter_mut() {
         let time = &format!(
             "{:.1}",
-            &status
+            status
                 .start
                 .elapsed()
                 .unwrap_or(Duration::new(0, 0))
