@@ -1,19 +1,19 @@
 use crate::duels::CombatState;
-use valence::prelude::*;
-use valence::protocol::Sound;
-use valence::protocol::sound::SoundCategory;
+use chunkedge::prelude::*;
+use chunkedge::protocol::Sound;
+use chunkedge::protocol::sound::SoundCategory;
 
 #[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
 pub struct DeathSet;
 
-#[derive(Event)]
-pub struct DeathEvent(pub Entity, pub bool);
+#[derive(Message)]
+pub struct DeathMessage(pub Entity, pub bool);
 
 pub struct DeathPlugin;
 
 impl Plugin for DeathPlugin {
     fn build(&self, app: &mut App) {
-        app.add_event::<DeathEvent>()
+        app.add_message::<DeathMessage>()
             .add_systems(Update, play_death_sound.in_set(DeathSet));
     }
 }
@@ -21,9 +21,9 @@ impl Plugin for DeathPlugin {
 pub fn play_death_sound(
     mut clients: Query<(&mut Client, &Position)>,
     states: Query<&CombatState>,
-    mut deaths: EventReader<DeathEvent>,
+    mut deaths: MessageReader<DeathMessage>,
 ) {
-    for DeathEvent(entity, show) in deaths.read() {
+    for DeathMessage(entity, show) in deaths.read() {
         let Ok(state) = states.get(*entity) else {
             continue;
         };

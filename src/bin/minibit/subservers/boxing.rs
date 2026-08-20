@@ -2,15 +2,15 @@
 
 use std::marker::PhantomData;
 use bevy_ecs::query::QueryData;
-use minibit_lib::duels::{CombatState, DefaultDuelsConfig, DuelsPlugin, EndGameEvent, Entities, PlayerGameState};
-use valence::entity::{EntityId, EntityStatuses};
-use valence::math::Vec3Swizzles;
-use valence::prelude::*;
-use valence::protocol::packets::play::HurtAnimationS2c;
-use valence::protocol::sound::SoundCategory;
-use valence::protocol::Sound;
-use valence::protocol::VarInt;
-use valence::protocol::WritePacket;
+use minibit_lib::duels::{CombatState, DefaultDuelsConfig, DuelsPlugin, EndGameMessage, Entities, PlayerGameState};
+use chunkedge::entity::{EntityId, EntityStatuses};
+use chunkedge::math::Vec3Swizzles;
+use chunkedge::prelude::*;
+use chunkedge::protocol::packets::play::HurtAnimationS2c;
+use chunkedge::protocol::sound::SoundCategory;
+use chunkedge::protocol::Sound;
+use chunkedge::protocol::VarInt;
+use chunkedge::protocol::WritePacket;
 use crate::ServerConfig;
 
 #[derive(Component, Default)]
@@ -60,17 +60,17 @@ struct CombatQuery {
 fn handle_combat_events(
     server: Res<Server>,
     mut clients: Query<CombatQuery>,
-    mut sprinting: EventReader<SprintEvent>,
-    mut interact_entity: EventReader<InteractEntityEvent>,
-    mut end_game: EventWriter<EndGameEvent>,
+    mut sprinting: MessageReader<SprintMessage>,
+    mut interact_entity: MessageReader<InteractEntityMessage>,
+    mut end_game: MessageWriter<EndGameMessage>,
 ) {
-    for &SprintEvent { client, state } in sprinting.read() {
+    for &SprintMessage { client, state } in sprinting.read() {
         if let Ok(mut client) = clients.get_mut(client) {
             client.state.has_bonus_knockback = state == SprintState::Start;
         }
     }
 
-    for &InteractEntityEvent {
+    for &InteractEntityMessage {
         client: attacker_client,
         entity: victim_client,
         interact: interaction,
@@ -145,7 +145,7 @@ fn handle_combat_events(
             attacker
                 .client
                 .send_chat_message("You have knocked out your opponent!");
-            end_game.send(EndGameEvent {
+            end_game.write(EndGameMessage {
                 game_id: victim.gamestate.game_id.unwrap(),
                 loser: victim.gamestate.team,
             });
@@ -156,10 +156,10 @@ fn handle_combat_events(
 fn end_game(
     mut clients: Query<&mut BoxingState>,
     games: Query<&Entities>,
-    mut end_game: EventReader<EndGameEvent>,
+    mut end_game: MessageReader<EndGameMessage>,
 ) {
-    for event in end_game.read() {
-        let Ok(entities) = games.get(event.game_id) else {
+    for message in end_game.read() {
+        let Ok(entities) = games.get(message.game_id) else {
             continue;
         };
         for entity in entities.0.iter() {

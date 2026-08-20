@@ -2,8 +2,8 @@
 
 use super::*;
 use crate::config::DataPath;
-use valence::anvil::AnvilLevel;
-use valence::prelude::*;
+use chunkedge::anvil::AnvilLevel;
+use chunkedge::prelude::*;
 
 #[derive(Bundle)]
 pub struct Game {
@@ -112,7 +112,7 @@ pub fn init_clients<T: Resource + DuelsConfig>(
 }
 
 pub fn check_queue(
-    mut start_game: EventWriter<StartGameEvent>,
+    mut start_game: MessageWriter<StartGameMessage>,
     server: Res<Server>,
     mut commands: Commands,
     mut globals: ResMut<ServerGlobals>,
@@ -135,7 +135,7 @@ pub fn check_queue(
             })
             .id();
 
-        start_game.send(StartGameEvent(game_id));
+        start_game.write(StartGameMessage(game_id));
     }
 }
 
@@ -153,7 +153,7 @@ pub fn start_game<T: Resource + DuelsConfig>(
     mut games: Query<(&mut MapIndex, &EntityLayerId, &Entities), Without<Client>>,
     chunklayers: Query<Entity, With<ChunkLayer>>,
     entitylayers: Query<Entity, With<EntityLayer>>,
-    mut start_game: EventReader<StartGameEvent>,
+    mut start_game: MessageReader<StartGameMessage>,
     globals: Res<MapGlobals>,
     config: Res<T>,
 ) {
@@ -214,7 +214,7 @@ pub fn end_game<T: Resource + DuelsConfig>(
         &mut Health,
     )>,
     games: Query<(&EntityLayerId, &Entities), Without<PlayerGameState>>,
-    mut end_game: EventReader<EndGameEvent>,
+    mut end_game: MessageReader<EndGameMessage>,
     mut commands: Commands,
     mut server_globals: ResMut<ServerGlobals>,
     globals: Res<MapGlobals>,

@@ -1,8 +1,8 @@
-use valence::{
+use chunkedge::{
     entity::living::LivingFlags,
-    event_loop::PacketEvent,
-    interact_item::InteractItemEvent,
-    inventory::{DropItemStackEvent, PlayerAction},
+    event_loop::PacketMessage,
+    interact_item::InteractItemMessage,
+    inventory::{DropItemStackMessage, PlayerAction},
     prelude::*,
     protocol::packets::play::PlayerActionC2s,
 };
@@ -17,9 +17,9 @@ impl Plugin for InteractionBroadcastPlugin {
 
 fn broadcast_use_item(
     mut clients: Query<&mut LivingFlags, With<Client>>,
-    mut events: EventReader<InteractItemEvent>,
+    mut messages: MessageReader<InteractItemMessage>,
 ) {
-    for event in events.read() {
+    for event in messages.read() {
         if let Ok(mut flags) = clients.get_mut(event.client) {
             flags.set_using_item(true);
         }
@@ -28,7 +28,7 @@ fn broadcast_use_item(
 
 fn broadcast_stop_item(
     mut clients: Query<&mut LivingFlags, With<Client>>,
-    mut packets: EventReader<PacketEvent>,
+    mut packets: MessageReader<PacketMessage>,
 ) {
     for packet in packets.read() {
         if let Some(pkt) = packet.decode::<PlayerActionC2s>()
@@ -50,9 +50,9 @@ impl Plugin for DisableDropPlugin {
 
 fn handle_drop(
     mut clients: Query<(&mut Inventory, &mut CursorItem)>,
-    mut drop_events: EventReader<DropItemStackEvent>,
+    mut drop_messages: MessageReader<DropItemStackMessage>,
 ) {
-    for event in drop_events.read() {
+    for event in drop_messages.read() {
         if let Ok((mut inv, mut cursor_item)) = clients.get_mut(event.client) {
             if let Some(slot) = event.from_slot {
                 if inv.slot(slot).item == event.stack.item {

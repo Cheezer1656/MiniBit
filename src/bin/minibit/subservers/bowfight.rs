@@ -5,17 +5,17 @@ use bevy_ecs::query::QueryData;
 use minibit_lib::duels::*;
 use minibit_lib::player::InteractionBroadcastPlugin;
 use minibit_lib::projectiles::*;
-use valence::entity::living::Health;
-use valence::entity::Velocity;
-use valence::entity::{EntityId, EntityStatuses};
-use valence::equipment::EquipmentInventorySync;
-use valence::math::Vec3Swizzles;
-use valence::prelude::*;
-use valence::protocol::packets::play::HurtAnimationS2c;
-use valence::protocol::sound::SoundCategory;
-use valence::protocol::Sound;
-use valence::protocol::VarInt;
-use valence::protocol::WritePacket;
+use chunkedge::entity::living::Health;
+use chunkedge::entity::Velocity;
+use chunkedge::entity::{EntityId, EntityStatuses};
+use chunkedge::equipment::EquipmentInventorySync;
+use chunkedge::math::Vec3Swizzles;
+use chunkedge::prelude::*;
+use chunkedge::protocol::packets::play::HurtAnimationS2c;
+use chunkedge::protocol::sound::SoundCategory;
+use chunkedge::protocol::Sound;
+use chunkedge::protocol::VarInt;
+use chunkedge::protocol::WritePacket;
 use crate::ServerConfig;
 
 pub fn main(config: ServerConfig) {
@@ -55,13 +55,13 @@ fn init_clients(clients: Query<Entity, Added<Client>>, mut commands: Commands) {
 fn gamestage_change(
     mut clients: Query<&mut Inventory, With<Client>>,
     games: Query<&Entities>,
-    mut event: EventReader<GameStageEvent>,
+    mut messages: MessageReader<GameStageMessage>,
 ) {
-    for event in event.read() {
-        if event.stage != 4 {
+    for message in messages.read() {
+        if message.stage != 4 {
             continue;
         }
-        if let Ok(entities) = games.get(event.game_id) {
+        if let Ok(entities) = games.get(message.game_id) {
             for entity in entities.0.iter() {
                 if let Ok(mut inventory) = clients.get_mut(*entity) {
                     inventory.set_slot(36, ItemStack::new(ItemKind::Bow, 1));
@@ -75,10 +75,10 @@ fn gamestage_change(
 fn end_game(
     mut clients: Query<&mut Inventory, With<Client>>,
     games: Query<&Entities>,
-    mut end_game: EventReader<EndGameEvent>,
+    mut end_game: MessageReader<EndGameMessage>,
 ) {
-    for event in end_game.read() {
-        if let Ok(entities) = games.get(event.game_id) {
+    for message in end_game.read() {
+        if let Ok(entities) = games.get(message.game_id) {
             for entity in entities.0.iter() {
                 if let Ok(mut inv) = clients.get_mut(*entity) {
                     for slot in 0..inv.slot_count() {
@@ -106,17 +106,17 @@ struct CombatQuery {
 fn handle_combat_events(
     server: Res<Server>,
     mut clients: Query<CombatQuery>,
-    mut sprinting: EventReader<SprintEvent>,
-    mut interact_entity: EventReader<InteractEntityEvent>,
-    mut end_game: EventWriter<EndGameEvent>,
+    mut sprinting: MessageReader<SprintMessage>,
+    mut interact_entity: MessageReader<InteractEntityMessage>,
+    mut end_game: MessageWriter<EndGameMessage>,
 ) {
-    for &SprintEvent { client, state } in sprinting.read() {
+    for &SprintMessage { client, state } in sprinting.read() {
         if let Ok(mut client) = clients.get_mut(client) {
             client.state.has_bonus_knockback = state == SprintState::Start;
         }
     }
 
-    for &InteractEntityEvent {
+    for &InteractEntityMessage {
         client: attacker_client,
         entity: victim_client,
         interact: interaction,
@@ -168,12 +168,12 @@ fn handle_combat_events(
 fn handle_collision_events(
     mut clients: Query<CombatQuery>,
     arrows: Query<(&Velocity, &ProjectileOwner)>,
-    mut collisions: EventReader<ProjectileCollisionEvent>,
-    mut end_game: EventWriter<EndGameEvent>,
+    mut collisions: MessageReader<ProjectileCollisionMessage>,
+    mut end_game: MessageWriter<EndGameMessage>,
 ) {
-    for event in collisions.read() {
-        if let Ok((vel, owner)) = arrows.get(event.arrow)
-            && let Ok([mut attacker, mut victim]) = clients.get_many_mut([owner.0, event.player])
+    for message in collisions.read() {
+        if let Ok((vel, owner)) = arrows.get(message.arrow)
+            && let Ok([mut attacker, mut victim]) = clients.get_many_mut([owner.0, message.player])
         {
             damage_player(
                 &mut attacker,
@@ -195,11 +195,11 @@ fn handle_collision_events(
 
 fn handle_oob_clients(
     positions: Query<(&mut Position, &PlayerGameState), With<Client>>,
-    mut end_game: EventWriter<EndGameEvent>,
+    mut end_game: MessageWriter<EndGameMessage>,
 ) {
     for (pos, gamestate) in positions.iter() {
         if pos.0.y < 0.0 && let Some(game_id) = gamestate.game_id {
-            end_game.send(EndGameEvent {
+            end_game.write(EndGameMessage {
                 game_id,
                 loser: gamestate.team,
             });
@@ -214,7 +214,7 @@ fn damage_player(
     victim: &mut CombatQueryItem,
     damage: f32,
     velocity: Vec3,
-    end_game: &mut EventWriter<EndGameEvent>,
+    end_game: &mut MessageWriter<EndGameMessage>,
 ) {
     let old_vel = Vec3::new(
         (victim.pos.0.x - victim.old_pos.get().x) as f32,
@@ -252,7 +252,7 @@ fn damage_player(
     });
 
     if victim.health.0 <= damage {
-        end_game.send(EndGameEvent {
+        end_game.write(EndGameMessage {
             game_id: victim.gamestate.game_id.unwrap(),
             loser: victim.gamestate.team,
         });

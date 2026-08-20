@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use valence::{
+use chunkedge::{
     prelude::*,
     scoreboard::{Objective, ObjectiveBundle, ObjectiveDisplay, ObjectiveScores},
 };

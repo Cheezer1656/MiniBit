@@ -1,4 +1,4 @@
-use valence::{
+use chunkedge::{
     command::{CommandScopeRegistry, scopes::CommandScopes},
     prelude::*,
 };

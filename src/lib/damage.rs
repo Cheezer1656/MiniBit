@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use valence::ItemKind;
+use chunkedge::ItemKind;
 
 // Uses 1.8 damage
 pub fn item_dmg(item: ItemKind) -> f32 {

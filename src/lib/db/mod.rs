@@ -4,7 +4,7 @@ pub mod schema;
 
 use diesel::prelude::*;
 use std::sync::Mutex;
-use valence::prelude::*;
+use chunkedge::prelude::*;
 
 #[derive(Resource)]
 pub struct Database(pub Mutex<PgConnection>);

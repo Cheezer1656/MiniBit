@@ -1,15 +1,15 @@
 #![allow(clippy::type_complexity)]
 
-use valence::client::Client;
-use valence::entity::EntityStatus;
-use valence::entity::living::{Absorption, Health};
-use valence::event_loop::PacketEvent;
-use valence::interact_item::InteractItemEvent;
-use valence::inventory::player_inventory::PlayerInventory;
-use valence::inventory::{HeldItem, Inventory, PlayerAction};
-use valence::prelude::*;
-use valence::protocol::packets::play::PlayerActionC2s;
-use valence::{Hand, ItemKind, Server};
+use chunkedge::client::Client;
+use chunkedge::entity::EntityStatus;
+use chunkedge::entity::living::{Absorption, Health};
+use chunkedge::event_loop::PacketMessage;
+use chunkedge::interact_item::InteractItemMessage;
+use chunkedge::inventory::player_inventory::PlayerInventory;
+use chunkedge::inventory::{HeldItem, Inventory, PlayerAction};
+use chunkedge::prelude::*;
+use chunkedge::protocol::packets::play::PlayerActionC2s;
+use chunkedge::{Hand, ItemKind, Server};
 
 pub struct GoldenApplePlugin;
 
@@ -35,13 +35,13 @@ fn init_clients(clients: Query<Entity, Added<Client>>, mut commands: Commands) {
 
 fn set_use_tick(
     mut clients: Query<(&Inventory, &HeldItem, &mut EatingStartTick), With<Client>>,
-    mut events: EventReader<InteractItemEvent>,
+    mut messages: MessageReader<InteractItemMessage>,
     server: Res<Server>,
 ) {
-    for event in events.read() {
-        if let Ok((inv, held_item, mut eat_tick)) = clients.get_mut(event.client)
+    for message in messages.read() {
+        if let Ok((inv, held_item, mut eat_tick)) = clients.get_mut(message.client)
             && inv
-                .slot(match event.hand {
+                .slot(match message.hand {
                     Hand::Main => held_item.slot(),
                     Hand::Off => PlayerInventory::SLOT_OFFHAND,
                 })
@@ -49,7 +49,7 @@ fn set_use_tick(
                 == ItemKind::GoldenApple
         {
             eat_tick.0 = server.current_tick();
-            eat_tick.1 = event.hand;
+            eat_tick.1 = message.hand;
         }
     }
 }
@@ -93,7 +93,7 @@ fn eat_gapple(
 
 fn cancel_gapple(
     mut clients: Query<(&Inventory, &HeldItem, &mut EatingStartTick), With<Client>>,
-    mut packets: EventReader<PacketEvent>,
+    mut packets: MessageReader<PacketMessage>,
 ) {
     for packet in packets.read() {
         if let Some(pkt) = packet.decode::<PlayerActionC2s>()

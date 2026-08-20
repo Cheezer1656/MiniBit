@@ -5,9 +5,9 @@ use std::marker::PhantomData;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use minibit_lib::config::{ConfigLoaderPlugin, EmptyConfig};
-use valence::prelude::*;
-use valence::protocol::sound::{Sound, SoundCategory};
-use valence::spawn::IsFlat;
+use chunkedge::prelude::*;
+use chunkedge::protocol::sound::{Sound, SoundCategory};
+use chunkedge::spawn::IsFlat;
 use crate::ServerConfig;
 
 const START_POS: BlockPos = BlockPos::new(0, 100, 0);

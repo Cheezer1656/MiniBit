@@ -11,13 +11,17 @@ use std::{
     marker::PhantomData,
     time::{Duration, SystemTime},
 };
-use valence::anvil::AnvilLevel;
-use valence::item::{ItemComponent, ProfileProperty, ResolvableProfile};
-use valence::protocol::packets::play::UseItemC2s;
-use valence::protocol::IntoTextComponent;
-use valence::{
-    entity::{living::Health, player::{PlayerEntityBundle, PlayerModelParts}}, event_loop::PacketEvent, inventory::{ClickSlotEvent, HeldItem}, message::{ChatMessageEvent, SendMessage}, player_list::{DisplayName, Listed, PlayerListEntryBundle}, prelude::*, protocol::{sound::SoundCategory, Sound}
+use chunkedge::anvil::AnvilLevel;
+use chunkedge::item::{ItemComponent, ProfileProperty, ResolvableProfile};
+use chunkedge::protocol::packets::play::UseItemC2s;
+use chunkedge::protocol::IntoTextComponent;
+use chunkedge::{
+    entity::{living::Health, player::PlayerModelParts}, inventory::HeldItem, message::SendMessage, player_list::{DisplayName, Listed, PlayerListEntryBundle}, prelude::*, protocol::{sound::SoundCategory, Sound}
 };
+use chunkedge::entity::player::PlayerEntity;
+use chunkedge::event_loop::PacketMessage;
+use chunkedge::inventory::ClickSlotMessage;
+use chunkedge::message::ChatReceivedMessage;
 
 #[derive(Deserialize, Clone)]
 enum ActionType {
@@ -26,8 +30,8 @@ enum ActionType {
     None,
 }
 
-#[derive(Event)]
-struct ActionEvent {
+#[derive(Message)]
+struct ActionMessage {
     entity: Entity,
     action: ActionType,
     args: Vec<String>,
@@ -93,7 +97,7 @@ pub fn main(config: ServerConfig) {
         .insert_resource(ServerGlobals {
             navigator_gui: None,
         })
-        .add_event::<ActionEvent>()
+        .add_message::<ActionMessage>()
         .add_systems(Startup, setup)
         .add_systems(EventLoopUpdate, (item_interactions, handle_slot_click))
         .add_systems(
@@ -138,15 +142,15 @@ fn setup(
     for npc in &config.npcs {
         let npc_id = UniqueId::default();
 
-        commands.spawn(PlayerEntityBundle {
-            layer: EntityLayerId(layer_id),
-            uuid: npc_id,
-            position: Position::new(npc.pos),
-            look: Look::new(npc.yaw, npc.pitch),
-            head_yaw: HeadYaw(npc.yaw),
-            player_player_model_parts: PlayerModelParts(126),
-            ..PlayerEntityBundle::default()
-        }).insert(NpcAction {
+        commands.spawn((
+            PlayerEntity,
+            EntityLayerId(layer_id),
+            npc_id,
+            Position::new(npc.pos),
+            Look::new(npc.yaw, npc.pitch),
+            HeadYaw(npc.yaw),
+            PlayerModelParts(126),
+        )).insert(NpcAction {
             command: npc.command.clone(),
             args: npc.args.clone(),
         });
@@ -234,7 +238,7 @@ fn init_clients(
         mut inv,
     ) in &mut clients
     {
-        let layer = layers.single();
+        let layer = layers.single().unwrap();
 
         layer_id.0 = layer;
         visible_chunk_layer.0 = layer;
@@ -262,7 +266,7 @@ fn manage_players(
     mut layers: Query<&mut ChunkLayer>,
     config: Res<LobbyConfig>,
 ) {
-    let layer = layers.single_mut();
+    let layer = layers.single_mut().unwrap();
     for (mut client, mut pos, yaw) in clients.iter_mut() {
         if pos.0.y < 0.0 {
             pos.set(config.world.spawns[0].pos);
@@ -290,11 +294,11 @@ fn manage_players(
 
 fn entity_interactions(
     actions: Query<&NpcAction>,
-    mut events: EventReader<InteractEntityEvent>,
-    mut action_event: EventWriter<ActionEvent>,
+    mut messages: MessageReader<InteractEntityMessage>,
+    mut action_event: MessageWriter<ActionMessage>,
 ) {
-    for event in events.read() {
-        match event.interact {
+    for message in messages.read() {
+        match message.interact {
             EntityInteraction::Attack => {}
             EntityInteraction::Interact(hand) => {
                 if hand != Hand::Main {
@@ -303,12 +307,12 @@ fn entity_interactions(
             }
             _ => continue,
         }
-        let Ok(action) = actions.get(event.entity) else {
+        let Ok(action) = actions.get(message.entity) else {
             continue;
         };
 
-        action_event.send(ActionEvent {
-            entity: event.client,
+        action_event.write(ActionMessage {
+            entity: message.client,
             action: action.command.clone(),
             args: action.args.clone(),
         });
@@ -317,7 +321,7 @@ fn entity_interactions(
 
 fn item_interactions(
     mut clients: Query<(Entity, &mut Inventory, &HeldItem), With<Client>>,
-    mut packets: EventReader<PacketEvent>,
+    mut packets: MessageReader<PacketMessage>,
     mut commands: Commands,
     globals: Res<ServerGlobals>,
 ) {
@@ -343,20 +347,20 @@ fn item_interactions(
 
 fn handle_slot_click(
     clients: Query<&OpenInventory, With<Client>>,
-    mut action_event: EventWriter<ActionEvent>,
-    mut click_slot: EventReader<ClickSlotEvent>,
+    mut action_event: MessageWriter<ActionMessage>,
+    mut click_slot: MessageReader<ClickSlotMessage>,
     config: Res<LobbyConfig>,
 ) {
-    for event in click_slot.read() {
-        if let Ok(_open_inv) = clients.get(event.client) && event.window_id.0 != 0 && event.slot_id >= 19 {
-            let offset_slot = event.slot_id as usize - 19;
+    for message in click_slot.read() {
+        if let Ok(_open_inv) = clients.get(message.client) && message.window_id.0 != 0 && message.slot_id >= 19 {
+            let offset_slot = message.slot_id as usize - 19;
             let row = offset_slot / 9;
             let col = offset_slot % 9;
             let npc = row * 7 + col;
 
             if npc < config.npcs.len() {
-                action_event.send(ActionEvent {
-                    entity: event.client,
+                action_event.write(ActionMessage {
+                    entity: message.client,
                     action: config.npcs[npc].command.clone(),
                     args: config.npcs[npc].args.clone(),
                 });
@@ -368,15 +372,15 @@ fn handle_slot_click(
 fn chat_message(
     usernames: Query<&Username>,
     mut clients: Query<&mut Client>,
-    mut events: EventReader<ChatMessageEvent>,
+    mut messages: MessageReader<ChatReceivedMessage>,
 ) {
-    for event in events.read() {
-        let Ok(username) = usernames.get(event.client) else {
+    for message in messages.read() {
+        let Ok(username) = usernames.get(message.client) else {
             continue;
         };
         for mut client in clients.iter_mut() {
             client.send_chat_message(
-                (String::new() + &username.0 + &String::from(": ") + &event.message)
+                (String::new() + &username.0 + &String::from(": ") + &message.message)
                     .color(Color::GRAY),
             );
         }
@@ -440,14 +444,14 @@ fn manage_parkour(
 }
 
 fn execute_action(
-    mut events: EventReader<ActionEvent>,
+    mut messages: MessageReader<ActionMessage>,
     mut clients: Query<(&mut Client, &Username)>,
 ) {
-    for event in events.read() {
-        if let Ok((mut client, username)) = clients.get_mut(event.entity) {
-            match event.action {
+    for message in messages.read() {
+        if let Ok((mut client, username)) = clients.get_mut(message.entity) {
+            match message.action {
                 ActionType::Message => {
-                    for arg in &event.args {
+                    for arg in &message.args {
                         client.send_chat_message(arg.clone().into_text().bold());
                     }
                 }
@@ -457,7 +461,7 @@ fn execute_action(
                     payload.push(0);
                     payload.extend_from_slice(username.0.to_string().as_bytes());
                     payload.push(0);
-                    payload.extend_from_slice(event.args[0].as_bytes());
+                    payload.extend_from_slice(message.args[0].as_bytes());
                     client.send_custom_payload(ident!("minibit:main"), &payload);
                 }
                 ActionType::None => {}

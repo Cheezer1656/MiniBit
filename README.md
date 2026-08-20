@@ -1,5 +1,5 @@
 # MiniBit
-A full blown Minecraft minigame server written in Rust using [Valence](https://github.com/valence-rs/valence).
+A full blown Minecraft minigame server written in Rust using [ChunkEdge](https://github.com/ChunkEdge/ChunkEdge).
 
 ![Screenshot](/images/lobby.png)
 

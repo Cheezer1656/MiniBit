@@ -2,11 +2,12 @@
 
 use std::marker::PhantomData;
 use minibit_lib::config::{ConfigLoaderPlugin, EmptyConfig};
-use valence::{
+use chunkedge::{
     entity::{
-        entity::NoGravity, falling_block::{FallingBlockEntity, FallingBlockEntityBundle}, ObjectData, Velocity
-    }, event_loop::PacketEvent, prelude::*, protocol::{packets::play::SwingC2s, sound::SoundCategory, Sound}, spawn::IsFlat
+        entity::NoGravity, falling_block::{FallingBlockEntity}, ObjectData, Velocity
+    }, prelude::*, protocol::{packets::play::SwingC2s, sound::SoundCategory, Sound}, spawn::IsFlat
 };
+use chunkedge::event_loop::PacketMessage;
 use crate::ServerConfig;
 
 const START_POS: DVec3 = DVec3::new(0.0, 100.0, 0.0);
@@ -96,14 +97,14 @@ fn init_clients(
 fn spawn_blocks(mut clients: Query<(Entity, &mut GameState), With<EntityLayer>>, mut commands: Commands) {
     for (layer, mut state) in clients.iter_mut() {
         if fastrand::u8(0..20) == 0 {
-            let block_id = commands.spawn(FallingBlockEntityBundle {
-                position: Position(START_POS + DVec3::new(fastrand::f64() * 40.0 - 20.0, fastrand::f64() * 40.0 - 20.0, fastrand::f64() * 10.0 + 20.0)),
-                layer: EntityLayerId(layer),
-                object_data: ObjectData(14),
-                entity_no_gravity: NoGravity(true),
-                velocity: Velocity(DVec3::new(0.0, 0.0, fastrand::f64() * 0.5)),
-                ..Default::default()
-            }).id();
+            let block_id = commands.spawn((
+                FallingBlockEntity,
+                Position(START_POS + DVec3::new(fastrand::f64() * 40.0 - 20.0, fastrand::f64() * 40.0 - 20.0, fastrand::f64() * 10.0 + 20.0)),
+                EntityLayerId(layer),
+                ObjectData(14),
+                NoGravity(true),
+                Velocity(DVec3::new(0.0, 0.0, fastrand::f64() * 0.5)),
+            )).id();
             state.blocks.push(block_id);
         }
     }
@@ -121,7 +122,7 @@ fn move_blocks(mut falling_blocks: Query<(Entity, &mut Position, &Velocity), Wit
 fn shoot(
     mut clients: Query<(&mut Client, &Position, &Look, &mut GameState)>,
     falling_blocks: Query<(Entity, &Position, &EntityLayerId), With<FallingBlockEntity>>,
-    mut packets: EventReader<PacketEvent>,
+    mut packets: MessageReader<PacketMessage>,
     mut commands: Commands
 ) {
     for pkt in packets.read() {

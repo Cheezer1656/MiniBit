@@ -3,9 +3,9 @@
 
 use super::*;
 use crate::config::DataPath;
-use valence::anvil::AnvilLevel;
-use valence::layer::UpdateLayersPreClientSet;
-use valence::prelude::*;
+use chunkedge::anvil::AnvilLevel;
+use chunkedge::layer::UpdateLayersPreClientSet;
+use chunkedge::prelude::*;
 
 #[derive(Bundle)]
 pub struct Game {
@@ -141,7 +141,7 @@ pub fn check_queue<T: Resource + DuelsConfig>(
         &mut Look,
         &mut HeadYaw,
     )>,
-    mut start_game_ev: EventWriter<StartGameEvent>,
+    mut start_game_ev: MessageWriter<StartGameMessage>,
     config: Res<T>,
     globals: Res<MapGlobals>,
     server: Res<Server>,
@@ -183,7 +183,7 @@ fn start_game<T: Resource + DuelsConfig>(
         &mut Look,
         &mut HeadYaw,
     )>,
-    start_game_ev: &mut EventWriter<StartGameEvent>,
+    start_game_ev: &mut MessageWriter<StartGameMessage>,
     commands: &mut Commands,
     server: &Res<Server>,
     dimensions: &Res<DimensionTypeRegistry>,
@@ -241,7 +241,7 @@ fn start_game<T: Resource + DuelsConfig>(
         client.send_chat_message("Game started!");
     }
 
-    start_game_ev.send(StartGameEvent(game_id));
+    start_game_ev.write(StartGameMessage(game_id));
 }
 
 pub fn end_game<T: Resource + DuelsConfig>(
@@ -255,7 +255,7 @@ pub fn end_game<T: Resource + DuelsConfig>(
         &mut Health,
     )>,
     games: Query<(&EntityLayerId, &Entities), Without<PlayerGameState>>,
-    mut end_game: EventReader<EndGameEvent>,
+    mut end_game: MessageReader<EndGameMessage>,
     mut commands: Commands,
     mut server_globals: ResMut<ServerGlobals>,
     globals: Res<MapGlobals>,

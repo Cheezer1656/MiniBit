@@ -1,10 +1,11 @@
 #![allow(dead_code)]
 
-use valence::inventory::player_inventory::PlayerInventory;
-use valence::{interact_block::InteractBlockEvent, inventory::HeldItem, math::IVec3, prelude::*};
+use chunkedge::inventory::player_inventory::PlayerInventory;
+use chunkedge::{inventory::HeldItem, math::IVec3, prelude::*};
+use chunkedge::interact_block::InteractBlockMessage;
 
-#[derive(Event)]
-pub struct BlockBreakEvent {
+#[derive(Message)]
+pub struct BlockBreakMessage {
     pub client: Entity,
     pub position: BlockPos,
     pub block: BlockKind,
@@ -24,7 +25,7 @@ impl Plugin for DiggingPlugin {
         app.insert_resource(DiggingPluginResource {
             whitelist: self.whitelist.clone(),
         })
-        .add_event::<BlockBreakEvent>()
+        .add_message::<BlockBreakMessage>()
         .add_systems(Update, handle_digging_events);
     }
 }
@@ -32,22 +33,22 @@ impl Plugin for DiggingPlugin {
 fn handle_digging_events(
     mut clients: Query<(&GameMode, &mut Inventory, &VisibleChunkLayer)>,
     mut layers: Query<&mut ChunkLayer>,
-    mut events: EventReader<DiggingEvent>,
-    mut break_events: EventWriter<BlockBreakEvent>,
+    mut messages: MessageReader<DiggingMessage>,
+    mut break_messages: MessageWriter<BlockBreakMessage>,
     res: Res<DiggingPluginResource>,
 ) {
-    for event in events.read() {
-        if let Ok((gamemode, mut inv, layer)) = clients.get_mut(event.client) {
+    for message in messages.read() {
+        if let Ok((gamemode, mut inv, layer)) = clients.get_mut(message.client) {
             if *gamemode == GameMode::Adventure
                 || *gamemode == GameMode::Spectator
-                || event.state != DiggingState::Stop
+                || message.state != DiggingState::Stop
             {
                 continue;
             }
             let Ok(mut chunk_layer) = layers.get_mut(layer.0) else {
                 continue;
             };
-            let Some(block) = chunk_layer.block(event.position) else {
+            let Some(block) = chunk_layer.block(message.position) else {
                 continue;
             };
             let block_kind = block.state.to_kind();
@@ -80,13 +81,13 @@ fn handle_digging_events(
                         },
                         _ => continue,
                     };
-                    let other_pos = event.position.get_in_direction(dir);
+                    let other_pos = message.position.get_in_direction(dir);
                     chunk_layer.set_block(other_pos, BlockState::AIR);
                 }
-                chunk_layer.set_block(event.position, BlockState::AIR);
-                break_events.send(BlockBreakEvent {
-                    client: event.client,
-                    position: event.position,
+                chunk_layer.set_block(message.position, BlockState::AIR);
+                break_messages.write(BlockBreakMessage {
+                    client: message.client,
+                    position: message.position,
                     block: block_kind,
                 });
             }
@@ -94,8 +95,8 @@ fn handle_digging_events(
     }
 }
 
-#[derive(Event)]
-pub struct BlockPlaceEvent {
+#[derive(Message)]
+pub struct BlockPlaceMessage {
     pub client: Entity,
     pub position: BlockPos,
     pub block: BlockKind,
@@ -140,7 +141,7 @@ impl Plugin for PlacingPlugin {
             max_z: self.max_z,
             min_z: self.min_z,
         })
-        .add_event::<BlockPlaceEvent>()
+        .add_message::<BlockPlaceMessage>()
         .add_systems(Update, handle_placing_events);
     }
 }
@@ -155,14 +156,14 @@ fn handle_placing_events(
         &VisibleChunkLayer,
     )>,
     mut layers: Query<&mut ChunkLayer>,
-    mut events: EventReader<InteractBlockEvent>,
-    mut placing_events: EventWriter<BlockPlaceEvent>,
+    mut messages: MessageReader<InteractBlockMessage>,
+    mut placing_messages: MessageWriter<BlockPlaceMessage>,
     restrictions: Option<Res<PlacingRestrictions>>,
     res: Res<PlacingPluginResource>,
 ) {
-    'outer: for event in events.read() {
-        if let Ok((gamemode, pos, mut inv, held_item, layer)) = clients.get_mut(event.client) {
-            let block_pos = event.position.get_in_direction(event.face);
+    'outer: for message in messages.read() {
+        if let Ok((gamemode, pos, mut inv, held_item, layer)) = clients.get_mut(message.client) {
+            let block_pos = message.position.get_in_direction(message.face);
             let block_x = block_pos.x as isize;
             let block_y = block_pos.y as isize;
             let block_z = block_pos.z as isize;
@@ -196,7 +197,7 @@ fn handle_placing_events(
                 inv.changed |= u64::MAX;
                 continue;
             };
-            let slot = match event.hand {
+            let slot = match message.hand {
                 Hand::Main => held_item.slot(),
                 Hand::Off => PlayerInventory::SLOT_OFFHAND,
             };
@@ -222,8 +223,8 @@ fn handle_placing_events(
                         chunk_layer.set_block(block_pos, block_kind.to_state());
                         let count = inv.slot(slot).count - 1;
                         inv.set_slot_amount(slot, count);
-                        placing_events.send(BlockPlaceEvent {
-                            client: event.client,
+                        placing_messages.write(BlockPlaceMessage {
+                            client: message.client,
                             position: block_pos,
                             block: block_kind,
                         });

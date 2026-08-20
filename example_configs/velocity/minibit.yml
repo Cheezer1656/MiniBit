@@ -1,5 +1,5 @@
 forwarding:
-  mode: 1
+  mode: 3
 
 bedwars:
   enabled: true

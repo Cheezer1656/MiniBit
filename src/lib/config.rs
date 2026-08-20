@@ -8,7 +8,7 @@ use std::{
     str::FromStr,
     sync::Arc,
 };
-use valence::{CompressionThreshold, ServerSettings, network::NetworkSettings, prelude::*};
+use chunkedge::{CompressionThreshold, ServerSettings, network::NetworkSettings, prelude::*};
 
 #[derive(Deserialize, Serialize, Clone)]
 #[serde(default)]

@@ -5,16 +5,15 @@ use std::{
     time::{Duration, Instant},
 };
 use minibit_lib::config::{ConfigLoaderPlugin, EmptyConfig};
-use valence::{
+use chunkedge::{
     entity::{
         entity::{self, NoGravity},
-        item::{ItemEntity, ItemEntityBundle, Stack},
-        player::{PlayerEntityBundle, PlayerModelParts},
+        item::{ItemEntity, Stack},
+        player::{PlayerModelParts},
         EntityId, Pose, Velocity,
     },
-    event_loop::PacketEvent,
     math::{IVec3, Vec3Swizzles},
-    player_list::{DisplayName, Listed, PlayerListEntryBundle},
+    player_list::{DisplayName, Listed},
     prelude::*,
     protocol::{
         sound::SoundCategory,
@@ -22,8 +21,11 @@ use valence::{
     },
     spawn::IsFlat,
 };
-use valence::protocol::packets::play::set_equipment_s2c::{EquipmentEntry, EquipmentSlot};
-use valence::protocol::packets::play::{AnimateS2c, SetEquipmentS2c, SwingC2s};
+use chunkedge::entity::player::PlayerEntity;
+use chunkedge::event_loop::PacketMessage;
+use chunkedge::player_list::PlayerListEntryBundle;
+use chunkedge::protocol::packets::play::set_equipment_s2c::{EquipmentEntry, EquipmentSlot};
+use chunkedge::protocol::packets::play::{AnimateS2c, SetEquipmentS2c, SwingC2s};
 use crate::ServerConfig;
 
 const START_POS: DVec3 = DVec3::new(0.0, 100.0, 0.0);
@@ -128,21 +130,19 @@ fn init_clients(
 
         let puppet_id = UniqueId::default();
         let puppet_entity_id = commands
-            .spawn(PlayerEntityBundle {
-                layer: EntityLayerId(entity),
-                uuid: puppet_id,
-                position: Position(START_POS + DVec3::new(0.0, 1.0, 0.5)),
-                look: Look::new(90.0, 0.0),
-                head_yaw: HeadYaw(90.0),
-                player_player_model_parts: PlayerModelParts(126),
-                ..Default::default()
-            })
+            .spawn((
+                PlayerEntity,
+                EntityLayerId(entity),
+                puppet_id,
+                Position(START_POS + DVec3::new(0.0, 1.0, 0.5)),
+                Look::new(90.0, 0.0),
+                HeadYaw(90.0),
+                PlayerModelParts(126),
+                IsPuppet,
+                Owner(entity),
+                DuckingState { time: None },
+            ))
             .id();
-        commands.entity(puppet_entity_id).insert((
-            IsPuppet,
-            Owner(entity),
-            DuckingState { time: None },
-        ));
         let mut puppet_props = Properties::default();
         puppet_props.set_skin("ewogICJ0aW1lc3RhbXAiIDogMTcyMDg5Mzk0ODQzMSwKICAicHJvZmlsZUlkIiA6ICI0OTY5YTVlZTYxMTY0MDBkYTM4YzhmZjRiMWJhZTZiZiIsCiAgInByb2ZpbGVOYW1lIiA6ICJSZWFjdFpJUCIsCiAgInNpZ25hdHVyZVJlcXVpcmVkIiA6IHRydWUsCiAgInRleHR1cmVzIiA6IHsKICAgICJTS0lOIiA6IHsKICAgICAgInVybCIgOiAiaHR0cDovL3RleHR1cmVzLm1pbmVjcmFmdC5uZXQvdGV4dHVyZS8yMzc4NzYzYzY3Mjg5MzllMWI0MDc5OWJjNDY5NWYxZDA4OGRjYzFkOWFhZDQxZWI4MDNjNzVkNDIwYmExZjk1IgogICAgfQogIH0KfQ==", "ax1Jq5CfbvonOQ2xP1wk2dyORpDavqhCvwrhdWblg7AvbthDlyNUHO6mWSSGMZwqHL+2A40DnUEcKsvMJhvjpP4QYUGowv0uCWPO8IemFXdrapZvprIi+TcBBP+FAI55cABR2SuanlBFs2azvT6wBdiBoASFCYr+7IZXhjVZct2siXprwXT0xEVDCw5Zy8mMc23iItDGxjzrNrA2/we6Hfapg+NUUu4xW2tm6SSkeSQi1Ox+TH9H4Z8rLUDv/4w1NB9bZuleS/X/HGHSs1BuS9XzCYuTmzkg9D1CtEVVFv0QgSw6Z7LdrOpls30iMaqbgJbhMUWF2L03gySiQlZEKzKw99SCxmLi9DopOfEBQzPQ2fHwyogjPA/BF7S0jbipZEYv5bcHi9hmjBeEJpRkQWaiJVGpg73btnzBZQHDES64wiNIQrNnKYgT77ClqG+3tfFvfBr44iEcwc+HJjMSZZRak1UsG5e7h7ki0JMV5klHacnvbEV06iW9y4RiO6v4hacMtBixCbVC0ZwGys1uQrSSoW1KJMZYNEW2qarePDGv2XHaJoCRXSnFxMmYPd1CH8q+N/hd5QBK/fXenhYodgYWwHxFhuV0WoI/43dtv7szoudNzm+6Q4piQtLdnl9VrGuLFZaSO0euephdp/Uqq+HnwRdd5Ve/wDqEaepZjsc=");
         commands.spawn(PlayerListEntryBundle {
@@ -156,19 +156,18 @@ fn init_clients(
 
         let cop_id = UniqueId::default();
         let cop_entity_id = commands
-            .spawn(PlayerEntityBundle {
-                layer: EntityLayerId(entity),
-                uuid: cop_id,
-                position: Position(START_POS + DVec3::new(0.5, 1.0, -6.5)),
-                look: Look::new(0.0, 0.0),
-                head_yaw: HeadYaw(0.0),
-                player_player_model_parts: PlayerModelParts(126),
-                ..Default::default()
-            })
+            .spawn((
+                PlayerEntity,
+                EntityLayerId(entity),
+                cop_id,
+                Position(START_POS + DVec3::new(0.5, 1.0, -6.5)),
+                Look::new(0.0, 0.0),
+                HeadYaw(0.0),
+                PlayerModelParts(126),
+                IsCop,
+                Owner(entity)
+            ))
             .id();
-        commands
-            .entity(cop_entity_id)
-            .insert((IsCop, Owner(entity)));
         let mut cop_props = Properties::default();
         cop_props.set_skin(
             "ewogICJ0aW1lc3RhbXAiIDogMTcyMDU5MDYxODAyOSwKICAicHJvZmlsZUlkIiA6ICJmODg2ZDI3YjhjNzU0NjAyODYyYTM1M2NlYmYwZTgwZiIsCiAgInByb2ZpbGVOYW1lIiA6ICJOb2JpbkdaIiwKICAic2lnbmF0dXJlUmVxdWlyZWQiIDogdHJ1ZSwKICAidGV4dHVyZXMiIDogewogICAgIlNLSU4iIDogewogICAgICAidXJsIiA6ICJodHRwOi8vdGV4dHVyZXMubWluZWNyYWZ0Lm5ldC90ZXh0dXJlL2EwMWU3ZmVhMTRhYjdmNWZhODEzOTY5ZWU2OGI1MmE5YTgzZWI2ODdlN2UwMjEwZDViN2MwOGNmYzYxMDZmOTIiCiAgICB9CiAgfQp9",
@@ -532,18 +531,18 @@ fn manage_blocks(
                     }
                 };
                 if fastrand::u8(0..10) == 0 {
-                    commands.spawn(ItemEntityBundle {
-                        item_stack: Stack(ItemStack::new(ItemKind::GoldBlock, 1)),
-                        position: Position(DVec3::new(
+                    commands.spawn((
+                        ItemEntity,
+                        Stack(ItemStack::new(ItemKind::GoldBlock, 1)),
+                        Position(DVec3::new(
                             block_pos.x as f64,
                             block_pos.y as f64 + fastrand::u8(1..=3) as f64,
                             block_pos.z as f64,
                         )),
-                        velocity: Velocity(DVec3::ZERO),
-                        entity_no_gravity: NoGravity(true),
-                        layer: *entity_layer,
-                        ..Default::default()
-                    });
+                        Velocity(DVec3::ZERO),
+                        NoGravity(true),
+                        *entity_layer,
+                    ));
                 }
             }
         }
@@ -560,7 +559,7 @@ fn lock_look(mut clients: Query<&mut Look, (With<Client>, With<GameStarted>)>) {
 fn handle_interactions(
     clients: Query<&GameState, With<GameStarted>>,
     mut puppets: Query<(&mut DuckingState, &mut entity::Pose), With<IsPuppet>>,
-    mut packets: EventReader<PacketEvent>,
+    mut packets: MessageReader<PacketMessage>,
 ) {
     for packet in packets.read() {
         if packet.decode::<SwingC2s>().is_some()
@@ -576,11 +575,11 @@ fn handle_interactions(
 fn handle_movement(
     mut clients: Query<(&mut Client, &Position, &OldPosition, &mut GameState), With<GameStarted>>,
     mut puppets: Query<(&Position, &mut Velocity), (With<IsPuppet>, Without<Client>)>,
-    mut sneaking: EventReader<SneakEvent>,
+    mut sneaking: MessageReader<SneakMessage>,
 ) {
-    for event in sneaking.read() {
-        if let Ok((_, _, _, mut state)) = clients.get_mut(event.client) {
-            state.sneaking = event.state == SneakState::Start;
+    for message in sneaking.read() {
+        if let Ok((_, _, _, mut state)) = clients.get_mut(message.client) {
+            state.sneaking = message.state == SneakState::Start;
         }
     }
     for (mut client, pos, old_pos, state) in clients.iter_mut() {
