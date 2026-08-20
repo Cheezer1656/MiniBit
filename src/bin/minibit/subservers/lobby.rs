@@ -192,7 +192,7 @@ fn setup(
             ItemStack::new(ItemKind::PlayerHead, 1).with_components(vec![
                 ItemComponent::CustomName(npc.name.clone().not_italic().into_text_component()),
                 ItemComponent::Profile(ResolvableProfile {
-                    name: Some(npc.name.clone()),
+                    name: Some(npc.name.clone().replace(" ", "")),
                     id: None,
                     properties: vec![
                         ProfileProperty {
