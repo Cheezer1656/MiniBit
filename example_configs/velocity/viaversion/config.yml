@@ -218,7 +218,6 @@ velocity-ping-save: true
 velocity-servers:
   default: 393
   lobby: 763
-  bedwars: 763
   sumo: 763
   parkour: 763
   classic: 763
